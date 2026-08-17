@@ -1,0 +1,262 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Common fields for all tables
+model Base {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime? // soft delete
+}
+
+/// User accounts (global)
+model User {
+  @@map("users")
+  // Base fields
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  // Auth fields
+  email        String   @unique
+  passwordHash String
+  name         String?
+
+  // Relations
+  businessUsers BusinessUser[]
+  userRoles     UserRole[]
+  // Audit logs, etc. can be added later
+}
+
+/// Business (tenant) entity
+model Business {
+  @@map("businesses")
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  name        String
+  slug        String   @unique
+  logoUrl     String?
+  isActive    Boolean  @default(true)
+  planName    String   @default("BASIC") // BASIC, PRO, ENTERPRISE
+  planExpiresAt DateTime?
+  // additional settings fields can be added later
+
+  ownerId     String?
+  businessSettings BusinessSettings?
+
+  // Back‑relations for multi‑tenant entities
+  businessUsers BusinessUser[]
+  roles        Role[]
+  userRoles    UserRole[]
+  products     Product[]
+  storefront   Storefront?
+  clients      Client[]
+  suppliers    Supplier[]
+  sales        Sale[]
+  purchases    Purchase[]
+  transactions Transaction[]
+}
+
+model Storefront {
+  @@map("storefronts")
+  id            String   @id @default(uuid())
+  businessId    String   @unique
+  business      Business @relation(fields: [businessId], references: [id])
+  
+  heroTitle     String?  @default("Bienvenido a nuestra tienda")
+  heroSubtitle  String?  @default("Los mejores productos al mejor precio")
+  heroImageUrl  String?
+  primaryColor  String?  @default("#3b82f6") // tailwind blue-500
+  themeMode     String   @default("dark")
+  
+  logoUrl       String?
+  aboutText     String?
+  aboutImageUrl String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model BusinessSettings {
+  @@map("business_settings")
+  id          String   @id @default(uuid())
+  businessId  String   @unique
+  business    Business @relation(fields: [businessId], references: [id])
+  currency    String   @default("USD")
+  taxRate     Float    @default(0)
+}
+
+model BusinessUser {
+  @@map("business_users")
+  id          String   @id @default(uuid())
+  userId      String
+  businessId  String
+  roleId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id])
+  business    Business @relation(fields: [businessId], references: [id])
+  role        Role     @relation(fields: [roleId], references: [id])
+}
+
+model Role {
+  @@map("roles")
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  businessId  String?
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+  business        Business? @relation(fields: [businessId], references: [id])
+  businessUsers   BusinessUser[]
+}
+
+model Permission {
+  @@map("permissions")
+  id   String @id @default(uuid())
+  name String @unique
+  description String?
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  @@map("role_permissions")
+  id           String @id @default(uuid())
+  roleId       String
+  permissionId String
+
+  role        Role        @relation(fields: [roleId], references: [id])
+  permission  Permission  @relation(fields: [permissionId], references: [id])
+}
+
+model UserRole {
+  @@map("user_roles")
+  id        String @id @default(uuid())
+  userId    String
+  roleId    String
+  businessId String
+
+  user      User @relation(fields: [userId], references: [id])
+  role      Role @relation(fields: [roleId], references: [id])
+  business  Business @relation(fields: [businessId], references: [id])
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  price       Decimal  @default(0)
+  stock       Int      @default(0)
+  imageUrl    String?
+  barcode     String?  // EAN13, Code128, etc.
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  saleItems     SaleItem[]
+  purchaseItems PurchaseItem[]
+}
+
+model Client {
+  id          String   @id @default(uuid())
+  name        String
+  email       String?
+  phone       String?
+  address     String?
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sales       Sale[]
+}
+
+model Supplier {
+  id          String   @id @default(uuid())
+  name        String
+  email       String?
+  phone       String?
+  address     String?
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  purchases   Purchase[]
+}
+
+model Sale {
+  id          String   @id @default(uuid())
+  total       Decimal  @default(0)
+  status      String   @default("COMPLETED") // PENDING, COMPLETED, CANCELLED
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  clientId    String?
+  client      Client?  @relation(fields: [clientId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items       SaleItem[]
+}
+
+model SaleItem {
+  id          String   @id @default(uuid())
+  quantity    Int
+  price       Decimal
+  saleId      String
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+}
+
+model Purchase {
+  id          String   @id @default(uuid())
+  total       Decimal  @default(0)
+  status      String   @default("COMPLETED") // PENDING, COMPLETED, CANCELLED
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  supplierId  String?
+  supplier    Supplier? @relation(fields: [supplierId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items       PurchaseItem[]
+}
+
+model PurchaseItem {
+  id          String   @id @default(uuid())
+  quantity    Int
+  price       Decimal
+  purchaseId  String
+  purchase    Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+}
+
+model Transaction {
+  id          String   @id @default(uuid())
+  type        String   // INCOME, EXPENSE
+  amount      Decimal
+  description String
+  category    String?
+  date        DateTime @default(now())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
