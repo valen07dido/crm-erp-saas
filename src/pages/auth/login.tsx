@@ -25,7 +25,11 @@ export default function LoginPage() {
       if (result?.error) {
         setError('Email o contraseña incorrectos');
       } else if (result?.ok) {
-        router.push('/dashboard');
+        if (email === 'valendido69@gmail.com') {
+          router.push('/superadmin');
+        } else {
+          router.push('/dashboard');
+        }
       }
     } catch {
       setError('Error de conexión');
