@@ -1,6 +1,7 @@
 import NextAuth, { type NextAuthOptions, type DefaultSession } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import prisma from '@/lib/prisma';
+import bcrypt from 'bcryptjs';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -16,8 +17,10 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email },
         });
         if (!user) return null;
-        // NOTE: passwordHash is stored plain for demo – replace with bcrypt.compare in production!
-        if (user.passwordHash !== credentials.password) return null;
+        
+        const isValid = bcrypt.compareSync(credentials.password, user.passwordHash);
+        if (!isValid) return null;
+        
         return { id: user.id, name: user.name ?? undefined, email: user.email };
       },
     }),

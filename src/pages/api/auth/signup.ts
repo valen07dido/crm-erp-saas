@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
+import bcrypt from 'bcryptjs';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -32,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         data: {
           email,
           name,
-          passwordHash: password, // TODO: bcrypt.hashSync(password, 10)
+          passwordHash: bcrypt.hashSync(password, 10),
         },
       });
 
