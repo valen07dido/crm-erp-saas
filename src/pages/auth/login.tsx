@@ -76,7 +76,7 @@ export default function LoginPage() {
                 <input
                   type="text"
                   value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
+                  onChange={(e) => setIdentifier(e.target.value.toLowerCase())}
                   placeholder="tu@email.com o tu_usuario"
                   required
                   className="flex h-11 w-full rounded-lg border border-input bg-background/50 pl-10 pr-4 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30"

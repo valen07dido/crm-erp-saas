@@ -18,9 +18,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { id, username } = req.body;
     if (!id) return res.status(400).json({ error: 'Missing user ID' });
 
-    const trimmed = typeof username === 'string' ? username.trim() : '';
+    const trimmed = typeof username === 'string' ? username.trim().toLowerCase() : '';
 
-    if (trimmed && !/^[a-zA-Z0-9_.-]{3,32}$/.test(trimmed)) {
+    if (trimmed && !/^[a-z0-9_.-]{3,32}$/.test(trimmed)) {
       return res.status(400).json({ error: 'El usuario debe tener entre 3 y 32 caracteres (letras, números, _ . -)' });
     }
 

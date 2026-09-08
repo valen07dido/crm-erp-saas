@@ -11,7 +11,11 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    // Emails and usernames are always stored lowercase — normalize as the
+    // user types so what they see matches what actually gets saved.
+    const lowercased = name === 'username' || name === 'email' ? value.toLowerCase() : value;
+    setForm({ ...form, [name]: lowercased });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

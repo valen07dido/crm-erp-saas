@@ -344,7 +344,7 @@ export default function SuperAdminPage() {
                         <input
                           type="text"
                           value={usernameEdits[user.id] ?? ''}
-                          onChange={(e) => setUsernameEdits({ ...usernameEdits, [user.id]: e.target.value })}
+                          onChange={(e) => setUsernameEdits({ ...usernameEdits, [user.id]: e.target.value.toLowerCase() })}
                           placeholder="Sin usuario asignado"
                           className="flex-1 rounded-lg border border-input bg-background px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary"
                         />

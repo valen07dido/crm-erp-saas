@@ -7,13 +7,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { name, username, email, password, businessName } = req.body;
+  const { name, password, businessName } = req.body;
+  const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : req.body.email;
+  const username = typeof req.body.username === 'string' ? req.body.username.trim().toLowerCase() : req.body.username;
 
   if (!email || !username || !password || !businessName) {
     return res.status(400).json({ error: 'Faltan campos obligatorios' });
   }
 
-  if (!/^[a-zA-Z0-9_.-]{3,32}$/.test(username)) {
+  if (!/^[a-z0-9_.-]{3,32}$/.test(username)) {
     return res.status(400).json({ error: 'El usuario debe tener entre 3 y 32 caracteres (letras, números, _ . -)' });
   }
 
