@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
+import { isModuleAllowed } from '@/lib/plans';
 import {
   LayoutDashboard,
   Package,
@@ -19,12 +20,15 @@ import {
   Wallet,
   ClipboardList,
   ScanBarcode,
+  BookOpen,
+  Gift,
 } from 'lucide-react';
 
 const menuItems = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
   { label: 'Punto de Venta', icon: ScanBarcode, href: '/dashboard/pos' },
   { label: 'Productos', icon: Package, href: '/dashboard/products' },
+  { label: 'Ofertas', icon: Gift, href: '/dashboard/offers' },
   { label: 'Clientes', icon: Users, href: '/dashboard/clients' },
   { label: 'Ventas', icon: ShoppingCart, href: '/dashboard/sales' },
   { label: 'Proveedores', icon: Truck, href: '/dashboard/suppliers' },
@@ -33,6 +37,7 @@ const menuItems = [
   { label: 'Gastos', icon: DollarSign, href: '/dashboard/expenses' },
   { label: 'Reportes', icon: BarChart3, href: '/dashboard/reports' },
   { label: 'Tienda Online', icon: Store, href: '/dashboard/store' },
+  { label: 'Tutoriales', icon: BookOpen, href: '/dashboard/tutorials' },
   { label: 'Configuración', icon: Settings, href: '/dashboard/settings' },
 ];
 
@@ -41,6 +46,7 @@ export function Sidebar() {
   const router = useRouter();
   const [businessName, setBusinessName] = useState('MiNegocio');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [planName, setPlanName] = useState<string | null>(null);
 
   useEffect(() => {
     const loadBranding = async () => {
@@ -49,6 +55,7 @@ export function Sidebar() {
         if (!meRes.ok) return;
         const { business } = await meRes.json();
         if (business?.name) setBusinessName(business.name);
+        if (business?.planName) setPlanName(business.planName);
 
         // Try to load storefront settings for logo
         const sfRes = await fetch('/api/storefront-settings', {
@@ -62,6 +69,10 @@ export function Sidebar() {
     };
     loadBranding();
   }, []);
+
+  const visibleMenuItems = planName
+    ? menuItems.filter((item) => isModuleAllowed(planName, item.href))
+    : menuItems;
 
   return (
     <aside
@@ -108,7 +119,7 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         <div className="flex flex-col gap-1">
-          {menuItems.map((item) => {
+          {visibleMenuItems.map((item) => {
             const isActive = router.pathname === item.href || router.pathname.startsWith(item.href + '/');
             const isPOS = item.href === '/dashboard/pos';
             return (

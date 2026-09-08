@@ -18,6 +18,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           _count: {
             select: { businessUsers: true, products: true, sales: true },
           },
+          businessUsers: {
+            include: {
+              user: {
+                select: { id: true, email: true, username: true, name: true },
+              },
+            },
+          },
         },
       });
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Settings, Save, Store, CreditCard, Palette, Globe, Image as ImageIcon } from 'lucide-react';
+import { ImageUploadField } from '@/components/ui/image-upload-field';
+import { Settings, Save, Store, CreditCard, Palette, Globe } from 'lucide-react';
 
 export default function SettingsPage() {
   const [business, setBusiness] = useState<any>(null);
@@ -132,15 +133,12 @@ export default function SettingsPage() {
                   
                   {/* Brand & Theme */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="mb-1.5 block text-sm font-medium flex items-center gap-2"><ImageIcon className="h-4 w-4"/> URL del Logo (Opcional)</label>
-                      <input 
-                        value={sf.logoUrl} 
-                        onChange={(e) => setSf({...sf, logoUrl: e.target.value})}
-                        placeholder="https://ejemplo.com/logo.png"
-                        className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring" 
-                      />
-                    </div>
+                    <ImageUploadField
+                      label="Logo (Opcional)"
+                      value={sf.logoUrl}
+                      onChange={(url) => setSf({ ...sf, logoUrl: url })}
+                      businessId={business?.id || null}
+                    />
                     <div>
                       <label className="mb-1.5 block text-sm font-medium">Color Primario (Hex)</label>
                       <div className="flex gap-2">
@@ -181,15 +179,12 @@ export default function SettingsPage() {
                           className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring" 
                         />
                       </div>
-                      <div>
-                        <label className="mb-1.5 block text-sm font-medium">Imagen de Fondo (URL)</label>
-                        <input 
-                          value={sf.heroImageUrl} 
-                          onChange={(e) => setSf({...sf, heroImageUrl: e.target.value})}
-                          placeholder="https://images.unsplash.com/photo-..."
-                          className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring" 
-                        />
-                      </div>
+                      <ImageUploadField
+                        label="Imagen de Fondo"
+                        value={sf.heroImageUrl}
+                        onChange={(url) => setSf({ ...sf, heroImageUrl: url })}
+                        businessId={business?.id || null}
+                      />
                     </div>
                   </div>
 
@@ -206,15 +201,12 @@ export default function SettingsPage() {
                           className="flex min-h-[80px] w-full rounded-lg border border-input bg-background/50 px-3 py-2 text-sm focus:ring-2 focus:ring-ring" 
                         />
                       </div>
-                      <div>
-                        <label className="mb-1.5 block text-sm font-medium">Imagen "Sobre Nosotros" (URL)</label>
-                        <input 
-                          value={sf.aboutImageUrl} 
-                          onChange={(e) => setSf({...sf, aboutImageUrl: e.target.value})}
-                          placeholder="https://ejemplo.com/local.jpg"
-                          className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring" 
-                        />
-                      </div>
+                      <ImageUploadField
+                        label='Imagen "Sobre Nosotros"'
+                        value={sf.aboutImageUrl}
+                        onChange={(url) => setSf({ ...sf, aboutImageUrl: url })}
+                        businessId={business?.id || null}
+                      />
                     </div>
                   </div>
 

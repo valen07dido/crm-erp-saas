@@ -17,7 +17,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const topProductsRaw = await prisma.saleItem.groupBy({
       by: ['productId'],
       where: {
-        sale: { businessId, status: { not: 'CANCELLED' } }
+        sale: { businessId, status: { not: 'CANCELLED' } },
+        productId: { not: null }, // combo lines (no productId) are tracked separately
       },
       _sum: { quantity: true, price: true },
       orderBy: { _sum: { quantity: 'desc' } },
@@ -25,7 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     const topProducts = await Promise.all(topProductsRaw.map(async (tp) => {
-      const p = await prisma.product.findUnique({ where: { id: tp.productId } });
+      const p = tp.productId ? await prisma.product.findUnique({ where: { id: tp.productId } }) : null;
       return {
         id: p?.id,
         name: p?.name || 'Desconocido',

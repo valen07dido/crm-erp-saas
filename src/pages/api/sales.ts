@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         include: {
           client: true,
           items: {
-            include: { product: true },
+            include: { product: true, combo: true },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -46,6 +46,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
 
         for (const item of items) {
+          if (item.comboId) {
+            // A combo is one line item, but stock is decremented from its component products.
+            const combo = await tx.combo.findUnique({ where: { id: item.comboId }, include: { items: true } });
+            if (!combo) throw new Error(`Combo not found: ${item.comboId}`);
+
+            for (const comboItem of combo.items) {
+              const product = await tx.product.findUnique({ where: { id: comboItem.productId } });
+              if (!product) throw new Error(`Product not found: ${comboItem.productId}`);
+              const needed = comboItem.quantity * item.quantity;
+              if (product.stock < needed) throw new Error(`Stock insuficiente de ${product.name} para el combo ${combo.name}`);
+            }
+
+            const itemTotal = Number(combo.price) * item.quantity;
+            total += itemTotal;
+
+            await tx.saleItem.create({
+              data: {
+                saleId: newSale.id,
+                comboId: item.comboId,
+                quantity: item.quantity,
+                price: combo.price,
+              },
+            });
+
+            for (const comboItem of combo.items) {
+              await tx.product.update({
+                where: { id: comboItem.productId },
+                data: { stock: { decrement: comboItem.quantity * item.quantity } },
+              });
+            }
+            continue;
+          }
+
           const product = await tx.product.findUnique({ where: { id: item.productId } });
           if (!product) throw new Error(`Product not found: ${item.productId}`);
           if (product.stock < item.quantity) throw new Error(`Insufficient stock for ${product.name}`);
@@ -75,7 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           data: { total },
           include: {
             client: true,
-            items: { include: { product: true } },
+            items: { include: { product: true, combo: true } },
           },
         });
 
@@ -107,7 +140,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const sale = await prisma.sale.findUnique({
         where: { id },
-        include: { items: true },
+        include: { items: { include: { combo: { include: { items: true } } } } },
       });
 
       if (!sale || sale.businessId !== businessId) {
@@ -136,6 +169,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // If CANCELLED, restore stock
         if (status === 'CANCELLED' && sale.status !== 'CANCELLED') {
           for (const item of sale.items) {
+            if (item.combo) {
+              for (const comboItem of item.combo.items) {
+                await tx.product.update({
+                  where: { id: comboItem.productId },
+                  data: { stock: { increment: comboItem.quantity * item.quantity } },
+                });
+              }
+              continue;
+            }
+            if (!item.productId) continue;
             await tx.product.update({
               where: { id: item.productId },
               data: { stock: { increment: item.quantity } },
@@ -150,7 +193,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           data: { status },
           include: {
             client: true,
-            items: { include: { product: true } },
+            items: { include: { product: true, combo: true } },
           },
         });
       });

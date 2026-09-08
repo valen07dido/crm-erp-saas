@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Truck, Plus, X, Search, PackageOpen, Download } from 'lucide-react';
+import { Truck, Plus, X, Search, PackageOpen, Download, FileUp, Trash2, Percent } from 'lucide-react';
 import { exportToCSV } from '@/lib/export';
 
 interface Purchase {
@@ -23,6 +23,15 @@ interface Supplier {
   name: string;
 }
 
+interface ImportItem {
+  id: string;
+  name: string;
+  barcode: string;
+  quantity: number;
+  cost: number;
+  salePrice: number;
+}
+
 export default function PurchasesPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -37,6 +46,16 @@ export default function PurchasesPage() {
   // Form state
   const [selectedSupplier, setSelectedSupplier] = useState('');
   const [cart, setCart] = useState<{ productId: string; quantity: number; price: number; product?: Product }[]>([]);
+
+  // PDF invoice import state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importSupplier, setImportSupplier] = useState('');
+  const [margin, setMargin] = useState(30);
+  const [importItems, setImportItems] = useState<ImportItem[]>([]);
+  const [rawText, setRawText] = useState('');
+  const [parsing, setParsing] = useState(false);
+  const [importSaving, setImportSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async (bId: string) => {
     try {
@@ -130,6 +149,135 @@ export default function PurchasesPage() {
     return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
   };
 
+  const resetImportState = () => {
+    setImportItems([]);
+    setRawText('');
+    setImportSupplier('');
+    setMargin(30);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !businessId) return;
+    setParsing(true);
+    try {
+      const fileBase64 = await fileToBase64(file);
+      const res = await fetch('/api/purchases/parse-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
+        body: JSON.stringify({ fileBase64 }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRawText(data.rawText || '');
+        const items: ImportItem[] = (data.items || []).map((it: any, idx: number) => ({
+          id: `${Date.now()}-${idx}`,
+          name: it.name,
+          barcode: it.code || '',
+          quantity: it.quantity,
+          cost: it.cost,
+          salePrice: Math.round(it.cost * (1 + margin / 100) * 100) / 100,
+        }));
+        setImportItems(items);
+      } else {
+        alert('No se pudo leer el PDF');
+      }
+    } catch (err) {
+      console.error('Error parsing PDF', err);
+      alert('Error procesando el PDF');
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const handleMarginChange = (value: string) => {
+    const m = parseFloat(value) || 0;
+    setMargin(m);
+    setImportItems(prev =>
+      prev.map(item => ({ ...item, salePrice: Math.round(item.cost * (1 + m / 100) * 100) / 100 }))
+    );
+  };
+
+  const updateImportItem = (id: string, field: keyof ImportItem, value: string) => {
+    setImportItems(prev =>
+      prev.map(item => {
+        if (item.id !== id) return item;
+        if (field === 'name' || field === 'barcode') {
+          return { ...item, [field]: value };
+        }
+        const numValue = parseFloat(value) || 0;
+        if (field === 'cost') {
+          return { ...item, cost: numValue, salePrice: Math.round(numValue * (1 + margin / 100) * 100) / 100 };
+        }
+        return { ...item, [field]: numValue };
+      })
+    );
+  };
+
+  const addImportRow = () => {
+    setImportItems(prev => [
+      ...prev,
+      { id: `manual-${Date.now()}`, name: '', barcode: '', quantity: 1, cost: 0, salePrice: 0 },
+    ]);
+  };
+
+  const removeImportRow = (id: string) => {
+    setImportItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleConfirmImport = async () => {
+    if (!businessId || importItems.length === 0) return;
+    setImportSaving(true);
+    try {
+      const payload = {
+        supplierId: importSupplier || null,
+        items: importItems.map(({ name, barcode, quantity, cost, salePrice }) => ({
+          name,
+          barcode: barcode || null,
+          quantity,
+          cost,
+          salePrice,
+        })),
+      };
+      const res = await fetch('/api/purchases/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setShowImportModal(false);
+        resetImportState();
+        fetchData(businessId);
+        alert(`Se actualizaron ${data.productsUpdated} productos correctamente.`);
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Error al ingresar la mercadería');
+      }
+    } catch (e) {
+      console.error('Error confirming import', e);
+    } finally {
+      setImportSaving(false);
+    }
+  };
+
+  const importTotals = importItems.reduce(
+    (acc, item) => ({
+      cost: acc.cost + item.cost * item.quantity,
+      sale: acc.sale + item.salePrice * item.quantity,
+    }),
+    { cost: 0, sale: 0 }
+  );
+
   const filteredPurchases = purchases.filter((p) =>
     p.id.toLowerCase().includes(searchQuery.toLowerCase()) || 
     (p.supplier?.name || '').toLowerCase().includes(searchQuery.toLowerCase())
@@ -158,6 +306,13 @@ export default function PurchasesPage() {
           >
             <Download className="h-4 w-4" />
             Exportar CSV
+          </button>
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium transition-colors hover:bg-accent"
+          >
+            <FileUp className="h-4 w-4" />
+            Importar Factura PDF
           </button>
           <button
             onClick={() => setShowModal(true)}
@@ -303,6 +458,219 @@ export default function PurchasesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => {
+              if (importSaving) return;
+              setShowImportModal(false);
+              resetImportState();
+            }}
+          />
+          <div className="relative max-h-[90vh] w-full max-w-4xl overflow-y-auto animate-slide-up rounded-2xl border border-border/50 bg-card p-6 shadow-2xl">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">Importar Factura de Proveedor (PDF)</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Subí el PDF, ajustá el margen de ganancia y revisá los datos antes de confirmar
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  if (importSaving) return;
+                  setShowImportModal(false);
+                  resetImportState();
+                }}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-accent"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {importItems.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border/50 bg-muted/20 p-10 text-center">
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={handlePdfUpload}
+                />
+                <FileUp className="mx-auto mb-3 h-10 w-10 text-muted-foreground opacity-50" />
+                <p className="mb-4 text-sm text-muted-foreground">
+                  Seleccioná el PDF de la factura o lista de precios del proveedor
+                </p>
+                <button
+                  type="button"
+                  disabled={parsing}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="mx-auto flex items-center justify-center gap-2 rounded-lg gradient-primary px-5 py-2.5 text-sm font-medium text-white shadow-lg transition-all hover:brightness-110 disabled:opacity-50"
+                >
+                  {parsing ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  ) : (
+                    <FileUp className="h-4 w-4" />
+                  )}
+                  {parsing ? 'Analizando PDF...' : 'Seleccionar PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={addImportRow}
+                  className="mx-auto mt-4 block text-sm text-primary hover:underline"
+                >
+                  o cargar productos manualmente
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {rawText && importItems.length === 0 && (
+                  <p className="text-sm text-amber-400">
+                    No se detectaron productos automáticamente. Podés revisar el texto extraído abajo y cargar los productos a mano.
+                  </p>
+                )}
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium">Proveedor (Opcional)</label>
+                    <select
+                      value={importSupplier}
+                      onChange={(e) => setImportSupplier(e.target.value)}
+                      className="h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Proveedor General</option>
+                      {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium">Margen de Ganancia</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={margin}
+                        onChange={(e) => handleMarginChange(e.target.value)}
+                        className="h-10 w-full rounded-lg border border-input bg-background/50 px-3 pr-9 text-sm focus:ring-2 focus:ring-ring"
+                      />
+                      <Percent className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="overflow-hidden rounded-lg border border-border/50">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border/50 bg-muted/30">
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Producto</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Cód. Barra</th>
+                        <th className="px-3 py-2 text-right font-medium text-muted-foreground">Cant.</th>
+                        <th className="px-3 py-2 text-right font-medium text-muted-foreground">Costo</th>
+                        <th className="px-3 py-2 text-right font-medium text-muted-foreground">Precio Venta</th>
+                        <th className="px-3 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importItems.map(item => (
+                        <tr key={item.id} className="border-b border-border/30">
+                          <td className="px-3 py-2">
+                            <input
+                              value={item.name}
+                              onChange={(e) => updateImportItem(item.id, 'name', e.target.value)}
+                              placeholder="Nombre del producto"
+                              className="h-8 w-full rounded border border-input bg-background px-2"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              value={item.barcode}
+                              onChange={(e) => updateImportItem(item.id, 'barcode', e.target.value)}
+                              placeholder="Opcional"
+                              className="h-8 w-28 rounded border border-input bg-background px-2 font-mono"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.quantity}
+                              onChange={(e) => updateImportItem(item.id, 'quantity', e.target.value)}
+                              className="h-8 w-16 rounded border border-input bg-background px-2 text-right"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={item.cost}
+                              onChange={(e) => updateImportItem(item.id, 'cost', e.target.value)}
+                              className="h-8 w-24 rounded border border-input bg-background px-2 text-right"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={item.salePrice}
+                              onChange={(e) => updateImportItem(item.id, 'salePrice', e.target.value)}
+                              className="h-8 w-24 rounded border border-input bg-background px-2 text-right font-semibold"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <button onClick={() => removeImportRow(item.id)} className="text-red-400 hover:text-red-300">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <button type="button" onClick={addImportRow} className="flex items-center gap-1 text-sm text-primary hover:underline">
+                    <Plus className="h-4 w-4" />
+                    Agregar producto
+                  </button>
+                  <div className="text-right text-sm">
+                    <p className="text-muted-foreground">Costo total: ${importTotals.cost.toFixed(2)}</p>
+                    <p className="font-semibold text-primary">Valor de venta: ${importTotals.sale.toFixed(2)}</p>
+                  </div>
+                </div>
+
+                {rawText && (
+                  <details className="rounded-lg border border-border/50 bg-muted/20 p-3">
+                    <summary className="cursor-pointer text-sm text-muted-foreground">Ver texto extraído del PDF</summary>
+                    <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-xs text-muted-foreground">{rawText}</pre>
+                  </details>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={resetImportState}
+                    className="flex h-10 flex-1 items-center justify-center rounded-lg border border-border text-sm font-medium hover:bg-accent"
+                  >
+                    Cargar otro PDF
+                  </button>
+                  <button
+                    type="button"
+                    disabled={importSaving || importItems.length === 0}
+                    onClick={handleConfirmImport}
+                    className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg gradient-primary text-sm font-medium text-white shadow-lg transition-all hover:brightness-110 disabled:opacity-50"
+                  >
+                    {importSaving ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    ) : (
+                      'Confirmar e Ingresar Mercadería'
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

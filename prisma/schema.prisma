@@ -28,6 +28,7 @@ model User {
 
   // Auth fields
   email        String   @unique
+  username     String?  @unique
   passwordHash String
   name         String?
 
@@ -67,6 +68,7 @@ model Business {
   sales        Sale[]
   purchases    Purchase[]
   transactions Transaction[]
+  combos       Combo[]
 }
 
 model Storefront {
@@ -170,6 +172,35 @@ model Product {
 
   saleItems     SaleItem[]
   purchaseItems PurchaseItem[]
+  comboItems    ComboItem[]
+}
+
+/// A fixed-price bundle of existing products (e.g. "Combo x3 $5000") sold as
+/// a single line item; selling one decrements stock from its component products.
+model Combo {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  price       Decimal  @default(0)
+  imageUrl    String?
+  barcode     String?
+  isActive    Boolean  @default(true)
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items       ComboItem[]
+  saleItems   SaleItem[]
+}
+
+model ComboItem {
+  id        String  @id @default(uuid())
+  comboId   String
+  combo     Combo   @relation(fields: [comboId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
 }
 
 model Client {
@@ -220,8 +251,12 @@ model SaleItem {
   price       Decimal
   saleId      String
   sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  productId   String
-  product     Product  @relation(fields: [productId], references: [id])
+  // Exactly one of productId/comboId is set — a combo is sold as a single
+  // line item (its component products are the ones that lose stock).
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id])
+  comboId     String?
+  combo       Combo?   @relation(fields: [comboId], references: [id])
 }
 
 model Purchase {

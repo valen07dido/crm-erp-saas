@@ -15,6 +15,9 @@ import {
   Maximize,
   Minimize,
   ArrowLeft,
+  Tag,
+  AlertCircle,
+  Gift,
 } from 'lucide-react';
 
 interface Product {
@@ -26,8 +29,42 @@ interface Product {
   imageUrl: string | null;
 }
 
-interface CartItem {
-  product: Product;
+interface ComboItem {
+  productId: string;
+  quantity: number;
+}
+
+interface Combo {
+  id: string;
+  name: string;
+  price: number;
+  barcode: string | null;
+  imageUrl: string | null;
+  isActive: boolean;
+  items: ComboItem[];
+}
+
+// Unified shape so products and combos can share the scan/search/cart flow.
+interface Sellable {
+  kind: 'product' | 'combo';
+  id: string;
+  name: string;
+  price: number;
+  barcode: string | null;
+  stock: number;
+}
+
+function comboAvailableStock(combo: Combo, products: Product[]): number {
+  if (combo.items.length === 0) return 0;
+  return Math.min(
+    ...combo.items.map((ci) => {
+      const product = products.find((p) => p.id === ci.productId);
+      return product ? Math.floor(product.stock / ci.quantity) : 0;
+    })
+  );
+}
+
+interface CartItem extends Sellable {
   quantity: number;
 }
 
@@ -38,6 +75,7 @@ interface Client {
 
 export default function POSPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [combos, setCombos] = useState<Combo[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [businessId, setBusinessId] = useState<string | null>(null);
@@ -50,6 +88,12 @@ export default function POSPage() {
   // Manual search
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Price check (does not touch the cart)
+  const [priceCheckOpen, setPriceCheckOpen] = useState(false);
+  const [priceCheckQuery, setPriceCheckQuery] = useState('');
+  const [priceCheckSelected, setPriceCheckSelected] = useState<Sellable | null>(null);
+  const priceCheckRef = useRef<HTMLInputElement>(null);
 
   // Payment modal
   const [payModalOpen, setPayModalOpen] = useState(false);
@@ -71,11 +115,13 @@ export default function POSPage() {
         const { business } = await meRes.json();
         setBusinessId(business.id);
 
-        const [prodRes, cliRes] = await Promise.all([
+        const [prodRes, comboRes, cliRes] = await Promise.all([
           fetch('/api/products', { headers: { 'x-business-id': business.id } }),
+          fetch('/api/combos', { headers: { 'x-business-id': business.id } }),
           fetch('/api/clients', { headers: { 'x-business-id': business.id } }),
         ]);
         if (prodRes.ok) setProducts(await prodRes.json());
+        if (comboRes.ok) setCombos(await comboRes.json());
         if (cliRes.ok) setClients(await cliRes.json());
       } catch (e) {
         console.error('POS init error', e);
@@ -88,22 +134,35 @@ export default function POSPage() {
 
   // Keep barcode input focused
   useEffect(() => {
-    if (!payModalOpen && !searchOpen && barcodeRef.current) {
+    if (!payModalOpen && !searchOpen && !priceCheckOpen && barcodeRef.current) {
       barcodeRef.current.focus();
     }
-  }, [payModalOpen, searchOpen, cart]);
+  }, [payModalOpen, searchOpen, priceCheckOpen, cart]);
 
-  // Add product to cart
-  const addToCart = useCallback((product: Product) => {
+  // Combined list of products + active combos, sharing the same searchable shape
+  const sellables: Sellable[] = [
+    ...products.map((p) => ({ kind: 'product' as const, id: p.id, name: p.name, price: Number(p.price), barcode: p.barcode, stock: p.stock })),
+    ...combos.filter((c) => c.isActive).map((c) => ({
+      kind: 'combo' as const,
+      id: c.id,
+      name: c.name,
+      price: Number(c.price),
+      barcode: c.barcode,
+      stock: comboAvailableStock(c, products),
+    })),
+  ];
+
+  // Add product/combo to cart
+  const addToCart = useCallback((sellable: Sellable) => {
     setCart(prev => {
-      const existing = prev.find(i => i.product.id === product.id);
+      const existing = prev.find(i => i.kind === sellable.kind && i.id === sellable.id);
       if (existing) {
-        if (existing.quantity >= product.stock) return prev; // can't exceed stock
+        if (existing.quantity >= sellable.stock) return prev; // can't exceed stock
         return prev.map(i =>
-          i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i
+          i.kind === sellable.kind && i.id === sellable.id ? { ...i, quantity: i.quantity + 1 } : i
         );
       }
-      return [...prev, { product, quantity: 1 }];
+      return [...prev, { ...sellable, quantity: 1 }];
     });
   }, []);
 
@@ -112,9 +171,9 @@ export default function POSPage() {
     if (e.key === 'Enter' && barcodeInput.trim()) {
       const code = barcodeInput.trim();
       // Find by barcode first, then by name partial match
-      const found = products.find(p =>
-        p.barcode?.toLowerCase() === code.toLowerCase() ||
-        p.name.toLowerCase() === code.toLowerCase()
+      const found = sellables.find(s =>
+        s.barcode?.toLowerCase() === code.toLowerCase() ||
+        s.name.toLowerCase() === code.toLowerCase()
       );
       if (found && found.stock > 0) {
         addToCart(found);
@@ -127,22 +186,48 @@ export default function POSPage() {
     }
   };
 
+  // Handle price-check lookup (Enter key) — never touches the cart
+  const handlePriceCheckScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter' || !priceCheckQuery.trim()) return;
+    const code = priceCheckQuery.trim().toLowerCase();
+    const found = sellables.find(s =>
+      s.barcode?.toLowerCase() === code ||
+      s.name.toLowerCase() === code
+    );
+    if (found) {
+      setPriceCheckSelected(found);
+      setPriceCheckQuery('');
+    }
+  };
+
+  const openPriceCheck = () => {
+    setPriceCheckQuery('');
+    setPriceCheckSelected(null);
+    setPriceCheckOpen(true);
+  };
+
+  const closePriceCheck = () => {
+    setPriceCheckOpen(false);
+    setPriceCheckQuery('');
+    setPriceCheckSelected(null);
+  };
+
   // Change quantity
-  const changeQty = (productId: string, delta: number) => {
+  const changeQty = (kind: 'product' | 'combo', id: string, delta: number) => {
     setCart(prev => {
       return prev
         .map(i => {
-          if (i.product.id !== productId) return i;
+          if (i.kind !== kind || i.id !== id) return i;
           const newQty = i.quantity + delta;
-          if (newQty > i.product.stock) return i;
+          if (newQty > i.stock) return i;
           return { ...i, quantity: newQty };
         })
         .filter(i => i.quantity > 0);
     });
   };
 
-  const removeItem = (productId: string) => {
-    setCart(prev => prev.filter(i => i.product.id !== productId));
+  const removeItem = (kind: 'product' | 'combo', id: string) => {
+    setCart(prev => prev.filter(i => !(i.kind === kind && i.id === id)));
   };
 
   const toggleFullscreen = async () => {
@@ -165,7 +250,7 @@ export default function POSPage() {
 
   const clearCart = () => setCart([]);
 
-  const cartTotal = cart.reduce((s, i) => s + Number(i.product.price) * i.quantity, 0);
+  const cartTotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
 
   const change = paymentMethod === 'cash' && cashReceived
@@ -185,7 +270,9 @@ export default function POSPage() {
         },
         body: JSON.stringify({
           clientId: selectedClient || null,
-          items: cart.map(i => ({ productId: i.product.id, quantity: i.quantity })),
+          items: cart.map(i => i.kind === 'combo'
+            ? { comboId: i.id, quantity: i.quantity }
+            : { productId: i.id, quantity: i.quantity }),
           status: 'COMPLETED',
         }),
       });
@@ -201,9 +288,13 @@ export default function POSPage() {
       setCashReceived('');
       setSelectedClient('');
 
-      // Reload products to refresh stock
-      const prodRes = await fetch('/api/products', { headers: { 'x-business-id': businessId } });
+      // Reload products/combos to refresh stock
+      const [prodRes, comboRes] = await Promise.all([
+        fetch('/api/products', { headers: { 'x-business-id': businessId } }),
+        fetch('/api/combos', { headers: { 'x-business-id': businessId } }),
+      ]);
       if (prodRes.ok) setProducts(await prodRes.json());
+      if (comboRes.ok) setCombos(await comboRes.json());
     } catch {
       alert('Error de conexión');
     } finally {
@@ -211,13 +302,21 @@ export default function POSPage() {
     }
   };
 
-  // Filtered products for manual search
-  const filteredProducts = products.filter(p =>
-    p.stock > 0 && (
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.barcode || '').toLowerCase().includes(searchQuery.toLowerCase())
+  // Filtered sellables (products + combos) for manual search
+  const filteredProducts = sellables.filter(s =>
+    s.stock > 0 && (
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.barcode || '').toLowerCase().includes(searchQuery.toLowerCase())
     )
   );
+
+  // Filtered sellables for price check (out-of-stock items are still valid to look up)
+  const priceCheckFiltered = priceCheckQuery.trim()
+    ? sellables.filter(s =>
+        s.name.toLowerCase().includes(priceCheckQuery.toLowerCase()) ||
+        (s.barcode || '').toLowerCase().includes(priceCheckQuery.toLowerCase())
+      )
+    : [];
 
   if (loading) {
     return (
@@ -331,28 +430,31 @@ export default function POSPage() {
                   </thead>
                   <tbody>
                     {cart.map((item, i) => (
-                      <tr key={item.product.id} className="border-b border-border/20 hover:bg-muted/10 animate-fade-in" style={{ animationDelay: `${i * 30}ms` }}>
+                      <tr key={`${item.kind}-${item.id}`} className="border-b border-border/20 hover:bg-muted/10 animate-fade-in" style={{ animationDelay: `${i * 30}ms` }}>
                         <td className="px-5 py-3">
-                          <p className="font-semibold">{item.product.name}</p>
-                          {item.product.barcode && (
-                            <p className="text-xs text-muted-foreground font-mono">{item.product.barcode}</p>
+                          <p className="font-semibold flex items-center gap-1.5">
+                            {item.kind === 'combo' && <Gift className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                            {item.name}
+                          </p>
+                          {item.barcode && (
+                            <p className="text-xs text-muted-foreground font-mono">{item.barcode}</p>
                           )}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => changeQty(item.product.id, -1)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors">
+                            <button onClick={() => changeQty(item.kind, item.id, -1)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors">
                               <Minus className="h-3.5 w-3.5" />
                             </button>
                             <span className="w-12 text-center font-bold text-lg tabular-nums">{item.quantity}</span>
-                            <button onClick={() => changeQty(item.product.id, 1)} disabled={item.quantity >= item.product.stock} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-30">
+                            <button onClick={() => changeQty(item.kind, item.id, 1)} disabled={item.quantity >= item.stock} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-30">
                               <Plus className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-right font-mono">${Number(item.product.price).toFixed(2)}</td>
-                        <td className="px-5 py-3 text-right font-bold text-primary font-mono">${(Number(item.product.price) * item.quantity).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-mono">${item.price.toFixed(2)}</td>
+                        <td className="px-5 py-3 text-right font-bold text-primary font-mono">${(item.price * item.quantity).toFixed(2)}</td>
                         <td className="px-3 py-3">
-                          <button onClick={() => removeItem(item.product.id)} className="flex h-7 w-7 items-center justify-center rounded-lg text-red-400 hover:bg-red-500/10 transition-colors">
+                          <button onClick={() => removeItem(item.kind, item.id)} className="flex h-7 w-7 items-center justify-center rounded-lg text-red-400 hover:bg-red-500/10 transition-colors">
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </td>
@@ -398,7 +500,7 @@ export default function POSPage() {
           </button>
 
           {/* Quick actions */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <button
               onClick={clearCart}
               disabled={cart.length === 0}
@@ -412,6 +514,14 @@ export default function POSPage() {
             >
               <Search className="h-4 w-4" />
               Buscar
+            </button>
+            <button
+              onClick={openPriceCheck}
+              title="Consultar precio sin agregar a la venta"
+              className="rounded-xl border border-border py-3 text-sm font-medium hover:bg-accent transition-colors flex items-center justify-center gap-1.5"
+            >
+              <Tag className="h-4 w-4" />
+              Precio
             </button>
           </div>
         </div>
@@ -429,7 +539,7 @@ export default function POSPage() {
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Buscar producto por nombre o código..."
+                placeholder="Buscar producto u oferta por nombre o código..."
                 className="h-14 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
               <button onClick={() => setSearchOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent">
@@ -445,18 +555,111 @@ export default function POSPage() {
               ) : (
                 filteredProducts.slice(0, 20).map(p => (
                   <button
-                    key={p.id}
+                    key={`${p.kind}-${p.id}`}
                     onClick={() => { addToCart(p); setSearchOpen(false); }}
                     className="flex w-full items-center justify-between px-5 py-3 text-left hover:bg-muted/30 transition-colors border-b border-border/20"
                   >
                     <div>
-                      <p className="font-semibold">{p.name}</p>
+                      <p className="font-semibold flex items-center gap-1.5">
+                        {p.kind === 'combo' && <Gift className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                        {p.name}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {p.barcode && <span className="font-mono mr-2">{p.barcode}</span>}
                         Stock: {p.stock}
                       </p>
                     </div>
-                    <span className="font-bold text-primary">${Number(p.price).toFixed(2)}</span>
+                    <span className="font-bold text-primary">${p.price.toFixed(2)}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Price Check Modal — read-only, never adds to the cart */}
+      {priceCheckOpen && (
+        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-24">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closePriceCheck} />
+          <div className="relative w-full max-w-lg animate-slide-up rounded-2xl border border-border/50 bg-card shadow-2xl overflow-hidden">
+            <div className="flex items-center gap-3 border-b border-border/50 px-4">
+              <Tag className="h-5 w-5 text-muted-foreground" />
+              <input
+                ref={priceCheckRef}
+                autoFocus
+                type="text"
+                value={priceCheckQuery}
+                onChange={e => setPriceCheckQuery(e.target.value)}
+                onKeyDown={handlePriceCheckScan}
+                placeholder="Escanear código o escribir nombre para ver el precio..."
+                className="h-14 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              />
+              <button onClick={closePriceCheck} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {priceCheckSelected && (
+              <div className="border-b border-border/50 bg-muted/20 p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold flex items-center gap-1.5">
+                      {priceCheckSelected.kind === 'combo' && <Gift className="h-4 w-4 shrink-0 text-primary" />}
+                      {priceCheckSelected.name}
+                    </p>
+                    {priceCheckSelected.barcode && (
+                      <p className="text-xs text-muted-foreground font-mono mt-0.5">{priceCheckSelected.barcode}</p>
+                    )}
+                    <span
+                      className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        priceCheckSelected.stock <= 5
+                          ? 'bg-red-500/15 text-red-400'
+                          : priceCheckSelected.stock <= 20
+                          ? 'bg-amber-500/15 text-amber-400'
+                          : 'bg-emerald-500/15 text-emerald-400'
+                      }`}
+                    >
+                      {priceCheckSelected.stock <= 5 && <AlertCircle className="h-3 w-3" />}
+                      Stock: {priceCheckSelected.stock}
+                    </span>
+                  </div>
+                  <p className="text-3xl font-black text-primary tabular-nums shrink-0">
+                    ${priceCheckSelected.price.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="max-h-80 overflow-y-auto">
+              {!priceCheckQuery.trim() ? (
+                <div className="py-12 text-center text-sm text-muted-foreground">
+                  <Tag className="mx-auto mb-3 h-10 w-10 opacity-20" />
+                  Escribí un nombre o escaneá un código de barra
+                </div>
+              ) : priceCheckFiltered.length === 0 ? (
+                <div className="py-12 text-center text-sm text-muted-foreground">
+                  <Package className="mx-auto mb-3 h-10 w-10 opacity-20" />
+                  No se encontraron productos
+                </div>
+              ) : (
+                priceCheckFiltered.slice(0, 20).map(p => (
+                  <button
+                    key={`${p.kind}-${p.id}`}
+                    onClick={() => setPriceCheckSelected(p)}
+                    className="flex w-full items-center justify-between px-5 py-3 text-left hover:bg-muted/30 transition-colors border-b border-border/20"
+                  >
+                    <div>
+                      <p className="font-semibold flex items-center gap-1.5">
+                        {p.kind === 'combo' && <Gift className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                        {p.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {p.barcode && <span className="font-mono mr-2">{p.barcode}</span>}
+                        Stock: {p.stock}
+                      </p>
+                    </div>
+                    <span className="font-bold text-primary">${p.price.toFixed(2)}</span>
                   </button>
                 ))
               )}

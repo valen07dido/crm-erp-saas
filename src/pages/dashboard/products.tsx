@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
+import { ImageUploadField } from '@/components/ui/image-upload-field';
 import {
   Package,
   Plus,
@@ -348,10 +349,12 @@ export default function ProductsPage() {
                 <label className="mb-1.5 block text-sm font-medium">Descripción</label>
                 <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="Bebida gaseosa" />
               </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">URL de Imagen (Opcional)</label>
-                <input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="https://ejemplo.com/imagen.jpg" />
-              </div>
+              <ImageUploadField
+                label="Imagen del Producto (Opcional)"
+                value={form.imageUrl}
+                onChange={(url) => setForm({ ...form, imageUrl: url })}
+                businessId={businessId}
+              />
               <div>
                 <label className="mb-1.5 block text-sm font-medium flex items-center gap-2">
                   Código de Barras

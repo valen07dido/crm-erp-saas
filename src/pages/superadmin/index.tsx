@@ -2,8 +2,18 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
-import { Shield, Settings, Users, Store, CheckCircle, XCircle, Calendar, RefreshCw } from 'lucide-react';
+import { Shield, Settings, Users, Store, CheckCircle, XCircle, Calendar, RefreshCw, Save } from 'lucide-react';
 import Link from 'next/link';
+import { PLAN_LABELS } from '@/lib/plans';
+
+interface BusinessUserRow {
+  user: {
+    id: string;
+    email: string;
+    username: string | null;
+    name: string | null;
+  };
+}
 
 interface Business {
   id: string;
@@ -13,6 +23,7 @@ interface Business {
   planName: string;
   planExpiresAt: string | null;
   createdAt: string;
+  businessUsers: BusinessUserRow[];
   _count: {
     businessUsers: number;
     products: number;
@@ -32,6 +43,8 @@ export default function SuperAdminPage() {
     planExpiresAt: '',
     isActive: true,
   });
+  const [usernameEdits, setUsernameEdits] = useState<Record<string, string>>({});
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -66,6 +79,30 @@ export default function SuperAdminPage() {
       planExpiresAt: b.planExpiresAt ? new Date(b.planExpiresAt).toISOString().split('T')[0] : '',
       isActive: b.isActive,
     });
+    setUsernameEdits(
+      Object.fromEntries(b.businessUsers.map((bu) => [bu.user.id, bu.user.username || '']))
+    );
+  };
+
+  const handleSaveUsername = async (userId: string) => {
+    setSavingUserId(userId);
+    try {
+      const res = await fetch('/api/superadmin/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: userId, username: usernameEdits[userId] }),
+      });
+      if (res.ok) {
+        fetchBusinesses();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Error al actualizar el usuario');
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setSavingUserId(null);
+    }
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -184,7 +221,7 @@ export default function SuperAdminPage() {
                     </td>
                     <td className="px-6 py-4">
                       <span className="inline-flex rounded-full bg-primary/10 px-2 py-1 text-xs font-bold text-primary">
-                        {b.planName}
+                        {PLAN_LABELS[b.planName] || b.planName}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -245,9 +282,9 @@ export default function SuperAdminPage() {
                   onChange={(e) => setForm({ ...form, planName: e.target.value })}
                   className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
                 >
-                  <option value="BASIC">BASIC</option>
-                  <option value="PRO">PRO</option>
-                  <option value="ENTERPRISE">ENTERPRISE</option>
+                  <option value="BASIC">{PLAN_LABELS.BASIC} (BASIC)</option>
+                  <option value="PRO">{PLAN_LABELS.PRO} (PRO)</option>
+                  <option value="ENTERPRISE">{PLAN_LABELS.ENTERPRISE} (ENTERPRISE)</option>
                 </select>
               </div>
 
@@ -289,6 +326,44 @@ export default function SuperAdminPage() {
                 </button>
               </div>
             </form>
+
+            {editingBusiness.businessUsers.length > 0 && (
+              <div className="mt-6 border-t border-border/50 pt-4">
+                <h3 className="mb-3 text-sm font-bold flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Usuarios de este comercio
+                </h3>
+                <div className="space-y-3">
+                  {editingBusiness.businessUsers.map(({ user }) => (
+                    <div key={user.id} className="rounded-lg border border-border/50 p-3">
+                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                      <div className="mt-1.5 flex gap-2">
+                        <input
+                          type="text"
+                          value={usernameEdits[user.id] ?? ''}
+                          onChange={(e) => setUsernameEdits({ ...usernameEdits, [user.id]: e.target.value })}
+                          placeholder="Sin usuario asignado"
+                          className="flex-1 rounded-lg border border-input bg-background px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary"
+                        />
+                        <button
+                          type="button"
+                          disabled={savingUserId === user.id}
+                          onClick={() => handleSaveUsername(user.id)}
+                          className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50"
+                        >
+                          {savingUserId === user.id ? (
+                            <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                          ) : (
+                            <Save className="h-3.5 w-3.5" />
+                          )}
+                          Guardar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

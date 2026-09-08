@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
+import { ImageUploadField } from '@/components/ui/image-upload-field';
 import { Save, Store, Layout, Type, Palette, Image as ImageIcon, ExternalLink } from 'lucide-react';
 
 interface StorefrontConfig {
@@ -179,17 +180,12 @@ export default function StoreBuilderPage() {
             <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
               <ImageIcon className="h-5 w-5 text-primary" /> Imagen de Portada
             </h2>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium">URL de la imagen (Hero)</label>
-              <input
-                type="text"
-                value={config.heroImageUrl}
-                onChange={(e) => handleChange('heroImageUrl', e.target.value)}
-                placeholder="https://ejemplo.com/imagen.jpg"
-                className="w-full rounded-lg border border-input bg-background/50 px-3 py-2 text-sm focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
-              />
-              <p className="mt-1.5 text-xs text-muted-foreground">Pega un link a tu imagen de portada (opcional).</p>
-            </div>
+            <ImageUploadField
+              label="Imagen de Portada"
+              value={config.heroImageUrl}
+              onChange={(url) => handleChange('heroImageUrl', url)}
+              businessId={businessData?.id || null}
+            />
           </div>
         </div>
 

@@ -31,3 +31,6 @@ Thumbs.db
 
 # Antigravity metadata
 *.metadata.json
+
+# TypeScript incremental build cache
+*.tsbuildinfo

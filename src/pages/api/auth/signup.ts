@@ -7,17 +7,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { name, email, password, businessName } = req.body;
+  const { name, username, email, password, businessName } = req.body;
 
-  if (!email || !password || !businessName) {
+  if (!email || !username || !password || !businessName) {
     return res.status(400).json({ error: 'Faltan campos obligatorios' });
+  }
+
+  if (!/^[a-zA-Z0-9_.-]{3,32}$/.test(username)) {
+    return res.status(400).json({ error: 'El usuario debe tener entre 3 y 32 caracteres (letras, números, _ . -)' });
   }
 
   try {
     // Check existing user
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await prisma.user.findFirst({ where: { OR: [{ email }, { username }] } });
     if (existing) {
-      return res.status(409).json({ error: 'El email ya está registrado' });
+      return res.status(409).json({
+        error: existing.email === email ? 'El email ya está registrado' : 'El usuario ya está en uso',
+      });
     }
 
     // Create slug from business name
@@ -32,6 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const user = await tx.user.create({
         data: {
           email,
+          username,
           name,
           passwordHash: bcrypt.hashSync(password, 10),
         },

@@ -174,7 +174,7 @@ export default function SalesPage() {
 
     // Items Table
     const tableData = sale.items.map(item => [
-      item.product.name,
+      item.combo?.name || item.product?.name || 'Producto eliminado',
       item.quantity.toString(),
       `$${Number(item.price).toFixed(2)}`,
       `$${(item.quantity * Number(item.price)).toFixed(2)}`
