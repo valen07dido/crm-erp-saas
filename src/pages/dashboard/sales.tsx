@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { ShoppingCart, Plus, X, Search, Download, FileText } from 'lucide-react';
 import { exportToCSV } from '@/lib/export';
+import { alertMessage } from '@/lib/alerts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -79,15 +80,15 @@ export default function SalesPage() {
     if (!productId) return;
     const product = products.find(p => p.id === productId);
     if (!product || product.stock <= 0) {
-      alert('Producto sin stock o no encontrado');
+      alertMessage('Producto sin stock o no encontrado', 'warning');
       return;
     }
-    
+
     setCart(prev => {
       const existing = prev.find(item => item.productId === productId);
       if (existing) {
         if (existing.quantity >= product.stock) {
-          alert('No hay suficiente stock');
+          alertMessage('No hay suficiente stock', 'warning');
           return prev;
         }
         return prev.map(item => item.productId === productId ? { ...item, quantity: item.quantity + 1 } : item);
@@ -103,7 +104,7 @@ export default function SalesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!businessId || cart.length === 0) {
-      alert('Debe agregar al menos un producto');
+      alertMessage('Debe agregar al menos un producto', 'warning');
       return;
     }
     setSaving(true);
@@ -141,7 +142,7 @@ export default function SalesPage() {
       if (res.ok) {
         fetchData(businessId);
       } else {
-        alert('Error al actualizar el estado');
+        alertMessage('Error al actualizar el estado');
       }
     } catch (e) {
       console.error(e);
@@ -248,6 +249,7 @@ export default function SalesPage() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border/50 bg-card shadow-lg">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border/50 bg-muted/30">
@@ -339,6 +341,7 @@ export default function SalesPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showModal && (

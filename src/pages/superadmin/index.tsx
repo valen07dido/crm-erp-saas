@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import { Shield, Settings, Users, Store, CheckCircle, XCircle, Calendar, RefreshCw, Save } from 'lucide-react';
 import Link from 'next/link';
 import { PLAN_LABELS } from '@/lib/plans';
+import { alertMessage, toastSuccess } from '@/lib/alerts';
 
 interface BusinessUserRow {
   user: {
@@ -93,10 +94,11 @@ export default function SuperAdminPage() {
         body: JSON.stringify({ id: userId, username: usernameEdits[userId] }),
       });
       if (res.ok) {
+        toastSuccess('Usuario actualizado');
         fetchBusinesses();
       } else {
         const data = await res.json();
-        alert(data.error || 'Error al actualizar el usuario');
+        alertMessage(data.error || 'Error al actualizar el usuario');
       }
     } catch (error) {
       console.error(error);
@@ -124,8 +126,9 @@ export default function SuperAdminPage() {
       if (res.ok) {
         setEditingBusiness(null);
         fetchBusinesses();
+        toastSuccess('Negocio actualizado');
       } else {
-        alert('Error al actualizar el negocio');
+        alertMessage('Error al actualizar el negocio');
       }
     } catch (error) {
       console.error(error);

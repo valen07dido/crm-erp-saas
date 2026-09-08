@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Users, Plus, Search, Edit3, Trash2, X, Download, Upload, DownloadCloud } from 'lucide-react';
 import { exportToCSV } from '@/lib/export';
+import { alertMessage, toastSuccess, confirmAction } from '@/lib/alerts';
 
 interface Client {
   id: string;
@@ -106,7 +107,7 @@ export default function ClientsPage() {
 
   const handleDelete = async (id: string) => {
     if (!businessId) return;
-    if (!confirm('¿Estás seguro de eliminar este cliente?')) return;
+    if (!(await confirmAction('¿Estás seguro de eliminar este cliente?', 'Sí, eliminar'))) return;
     try {
       await fetch(`/api/clients?id=${id}`, {
         method: 'DELETE',
@@ -129,7 +130,7 @@ export default function ClientsPage() {
         const text = event.target?.result as string;
         const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         if (lines.length < 2) {
-          alert('El archivo CSV debe tener al menos una cabecera y una fila de datos');
+          alertMessage('El archivo CSV debe tener al menos una cabecera y una fila de datos', 'warning');
           return;
         }
 
@@ -151,15 +152,15 @@ export default function ClientsPage() {
 
         if (res.ok) {
           const data = await res.json();
-          alert(`¡Se importaron ${data.count} clientes exitosamente!`);
+          toastSuccess(`¡Se importaron ${data.count} clientes exitosamente!`);
           fetchClients(businessId);
           setShowImportModal(false);
         } else {
-          alert('Error importando clientes');
+          alertMessage('Error importando clientes');
         }
       } catch (err) {
         console.error(err);
-        alert('Error procesando el archivo CSV. Asegúrese de que el formato sea correcto.');
+        alertMessage('Error procesando el archivo CSV. Asegúrese de que el formato sea correcto.');
       } finally {
         setImporting(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -227,6 +228,7 @@ export default function ClientsPage() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border/50 bg-card shadow-lg">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border/50 bg-muted/30">
@@ -280,6 +282,7 @@ export default function ClientsPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showModal && (

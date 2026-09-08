@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Truck, Plus, X, Search, PackageOpen, Download, FileUp, Trash2, Percent } from 'lucide-react';
 import { exportToCSV } from '@/lib/export';
+import { alertMessage, toastSuccess } from '@/lib/alerts';
 
 interface Purchase {
   id: string;
@@ -118,7 +119,7 @@ export default function PurchasesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!businessId || cart.length === 0) {
-      alert('Debe agregar al menos un producto');
+      alertMessage('Debe agregar al menos un producto', 'warning');
       return;
     }
     setSaving(true);
@@ -189,11 +190,11 @@ export default function PurchasesPage() {
         }));
         setImportItems(items);
       } else {
-        alert('No se pudo leer el PDF');
+        alertMessage('No se pudo leer el PDF');
       }
     } catch (err) {
       console.error('Error parsing PDF', err);
-      alert('Error procesando el PDF');
+      alertMessage('Error procesando el PDF');
     } finally {
       setParsing(false);
     }
@@ -258,10 +259,10 @@ export default function PurchasesPage() {
         setShowImportModal(false);
         resetImportState();
         fetchData(businessId);
-        alert(`Se actualizaron ${data.productsUpdated} productos correctamente.`);
+        toastSuccess(`Se actualizaron ${data.productsUpdated} productos correctamente.`);
       } else {
         const err = await res.json();
-        alert(err.error || 'Error al ingresar la mercadería');
+        alertMessage(err.error || 'Error al ingresar la mercadería');
       }
     } catch (e) {
       console.error('Error confirming import', e);
@@ -336,6 +337,7 @@ export default function PurchasesPage() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border/50 bg-card shadow-lg">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border/50 bg-muted/30">
@@ -380,6 +382,7 @@ export default function PurchasesPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showModal && (
@@ -562,6 +565,7 @@ export default function PurchasesPage() {
                 </div>
 
                 <div className="overflow-hidden rounded-lg border border-border/50">
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border/50 bg-muted/30">
@@ -628,6 +632,7 @@ export default function PurchasesPage() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between">

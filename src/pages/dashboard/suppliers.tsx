@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Truck, Plus, Search, Edit3, Trash2, X, Download } from 'lucide-react';
 import { exportToCSV } from '@/lib/export';
+import { confirmAction } from '@/lib/alerts';
 
 interface Supplier {
   id: string;
@@ -103,7 +104,7 @@ export default function SuppliersPage() {
 
   const handleDelete = async (id: string) => {
     if (!businessId) return;
-    if (!confirm('¿Estás seguro de eliminar este proveedor?')) return;
+    if (!(await confirmAction('¿Estás seguro de eliminar este proveedor?', 'Sí, eliminar'))) return;
     try {
       await fetch(`/api/suppliers?id=${id}`, {
         method: 'DELETE',
@@ -156,6 +157,7 @@ export default function SuppliersPage() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border/50 bg-card shadow-lg">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border/50 bg-muted/30">
@@ -209,6 +211,7 @@ export default function SuppliersPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showModal && (

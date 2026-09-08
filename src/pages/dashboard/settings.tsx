@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { ImageUploadField } from '@/components/ui/image-upload-field';
 import { Settings, Save, Store, CreditCard, Palette, Globe } from 'lucide-react';
+import { alertMessage, toastSuccess } from '@/lib/alerts';
 
 export default function SettingsPage() {
   const [business, setBusiness] = useState<any>(null);
@@ -68,7 +69,7 @@ export default function SettingsPage() {
     setSaving(true);
     setTimeout(() => {
       setSaving(false);
-      alert('Configuración guardada exitosamente');
+      toastSuccess('Configuración guardada exitosamente');
     }, 1000);
   };
 
@@ -84,10 +85,10 @@ export default function SettingsPage() {
         },
         body: JSON.stringify(sf)
       });
-      alert('Diseño de la tienda actualizado');
+      toastSuccess('Diseño de la tienda actualizado');
     } catch (e) {
       console.error(e);
-      alert('Error guardando diseño');
+      alertMessage('Error guardando diseño');
     } finally {
       setSaving(false);
     }
@@ -256,7 +257,7 @@ export default function SettingsPage() {
                       <CreditCard className="h-4 w-4 text-primary" />
                       Preferencias Financieras
                     </h3>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div>
                         <label className="mb-1.5 block text-sm font-medium">Moneda Principal</label>
                         <select 

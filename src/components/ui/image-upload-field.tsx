@@ -1,6 +1,7 @@
-import React, { useRef, useState } from 'react';
-import { ImagePlus, X, Link as LinkIcon } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ImagePlus, X, Link as LinkIcon, ImageOff } from 'lucide-react';
 import { uploadImage } from '@/lib/uploadImage';
+import { alertMessage } from '@/lib/alerts';
 
 interface ImageUploadFieldProps {
   label: string;
@@ -13,7 +14,13 @@ interface ImageUploadFieldProps {
 export function ImageUploadField({ label, value, onChange, businessId, hint }: ImageUploadFieldProps) {
   const [uploading, setUploading] = useState(false);
   const [showUrlInput, setShowUrlInput] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Re-attempt loading whenever the URL itself changes (a new upload or a pasted link).
+  useEffect(() => {
+    setImgFailed(false);
+  }, [value]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -24,7 +31,7 @@ export function ImageUploadField({ label, value, onChange, businessId, hint }: I
       onChange(url);
     } catch (err: any) {
       console.error('Error uploading image', err);
-      alert(err.message || 'Error subiendo la imagen');
+      alertMessage(err.message || 'Error subiendo la imagen');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -43,9 +50,20 @@ export function ImageUploadField({ label, value, onChange, businessId, hint }: I
       />
 
       {value ? (
-        <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-background/50 p-3">
-          <img src={value} alt={label} className="h-14 w-14 shrink-0 rounded-lg object-cover" />
-          <div className="flex flex-1 flex-col gap-1.5 sm:flex-row">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/50 bg-background/50 p-3">
+          {imgFailed ? (
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <ImageOff className="h-5 w-5" />
+            </div>
+          ) : (
+            <img
+              src={value}
+              alt={label}
+              onError={() => setImgFailed(true)}
+              className="h-14 w-14 shrink-0 rounded-lg border border-border/50 object-cover"
+            />
+          )}
+          <div className="flex flex-1 flex-wrap gap-1.5">
             <button
               type="button"
               disabled={uploading}
@@ -68,6 +86,9 @@ export function ImageUploadField({ label, value, onChange, businessId, hint }: I
               Quitar
             </button>
           </div>
+          {imgFailed && (
+            <p className="w-full text-xs text-amber-400">No se pudo cargar esta imagen. Probá subir otra.</p>
+          )}
         </div>
       ) : (
         <button

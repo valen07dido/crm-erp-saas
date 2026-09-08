@@ -86,3 +86,11 @@
   from { opacity: 0; transform: translateX(20px); }
   to { opacity: 1; transform: translateX(0); }
 }
+
+/* iOS Safari auto-zooms into any input/select/textarea with a font-size
+   under 16px — force 16px on phones so tapping a field doesn't zoom the page. */
+@media (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}

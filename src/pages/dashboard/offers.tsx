@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { ImageUploadField } from '@/components/ui/image-upload-field';
 import { exportToCSV } from '@/lib/export';
+import { alertMessage, confirmAction } from '@/lib/alerts';
 import {
   Gift,
   Plus,
@@ -136,7 +137,7 @@ export default function OffersPage() {
     e.preventDefault();
     if (!businessId) return;
     if (draftItems.length < 2) {
-      alert('Un combo necesita al menos 2 productos');
+      alertMessage('Un combo necesita al menos 2 productos', 'warning');
       return;
     }
     setSaving(true);
@@ -176,7 +177,7 @@ export default function OffersPage() {
 
   const handleDelete = async (id: string) => {
     if (!businessId) return;
-    if (!confirm('¿Estás seguro de eliminar esta oferta?')) return;
+    if (!(await confirmAction('¿Estás seguro de eliminar esta oferta?', 'Sí, eliminar'))) return;
     try {
       await fetch(`/api/combos?id=${id}`, {
         method: 'DELETE',
@@ -235,6 +236,7 @@ export default function OffersPage() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border/50 bg-card shadow-lg">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border/50 bg-muted/30">
@@ -323,6 +325,7 @@ export default function OffersPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showModal && (
@@ -358,7 +361,7 @@ export default function OffersPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-1.5 block text-sm font-medium">Precio de la oferta *</label>
                   <input

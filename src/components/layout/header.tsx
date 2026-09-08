@@ -1,7 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, Search, User, LogOut, Settings, ChevronDown, Package, AlertTriangle } from 'lucide-react';
+import { Bell, Search, User, LogOut, Settings, ChevronDown, Package, AlertTriangle, Menu } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
+
+interface HeaderProps {
+  onOpenMobileNav?: () => void;
+}
 
 interface Notification {
   id: string;
@@ -11,7 +15,7 @@ interface Notification {
   time: string;
 }
 
-export function Header() {
+export function Header({ onOpenMobileNav }: HeaderProps) {
   const { data: session } = useSession();
   const [showMenu, setShowMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -72,9 +76,16 @@ export function Header() {
   const initials  = userName.charAt(0).toUpperCase();
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/50 bg-background/80 px-6 backdrop-blur-xl">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-border/50 bg-background/80 px-4 backdrop-blur-xl sm:px-6">
+      <button
+        onClick={onOpenMobileNav}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent md:hidden"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
       {/* Search */}
-      <div className="relative max-w-md flex-1">
+      <div className="relative hidden max-w-md flex-1 sm:block">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="text"
@@ -82,6 +93,7 @@ export function Header() {
           className="h-10 w-full rounded-lg border border-input bg-background/50 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30"
         />
       </div>
+      <div className="flex-1 sm:hidden" />
 
       {/* Right side */}
       <div className="flex items-center gap-3">

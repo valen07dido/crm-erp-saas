@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { ImageUploadField } from '@/components/ui/image-upload-field';
 import { Save, Store, Layout, Type, Palette, Image as ImageIcon, ExternalLink } from 'lucide-react';
+import { alertMessage, toastSuccess } from '@/lib/alerts';
 
 interface StorefrontConfig {
   heroTitle: string;
@@ -64,10 +65,10 @@ export default function StoreBuilderPage() {
         headers: { 'Content-Type': 'application/json', 'x-business-id': businessData.id },
         body: JSON.stringify(config),
       });
-      alert('Configuración guardada exitosamente');
+      toastSuccess('Configuración guardada exitosamente');
     } catch (e) {
       console.error('Error saving config', e);
-      alert('Error al guardar la configuración');
+      alertMessage('Error al guardar la configuración');
     } finally {
       setSaving(false);
     }

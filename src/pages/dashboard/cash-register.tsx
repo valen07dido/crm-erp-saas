@@ -133,6 +133,7 @@ export default function CashRegisterPage() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border/50 bg-card shadow-lg">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border/50 bg-muted/30">
@@ -183,6 +184,7 @@ export default function CashRegisterPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showModal && (

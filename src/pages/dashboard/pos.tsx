@@ -19,6 +19,7 @@ import {
   AlertCircle,
   Gift,
 } from 'lucide-react';
+import { alertMessage } from '@/lib/alerts';
 
 interface Product {
   id: string;
@@ -278,7 +279,7 @@ export default function POSPage() {
       });
       if (!res.ok) {
         const data = await res.json();
-        alert(data.error || 'Error al registrar la venta');
+        alertMessage(data.error || 'Error al registrar la venta');
         return;
       }
       const sale = await res.json();
@@ -296,7 +297,7 @@ export default function POSPage() {
       if (prodRes.ok) setProducts(await prodRes.json());
       if (comboRes.ok) setCombos(await comboRes.json());
     } catch {
-      alert('Error de conexión');
+      alertMessage('Error de conexión');
     } finally {
       setSubmitting(false);
     }
@@ -349,7 +350,7 @@ export default function POSPage() {
         </div>
       )}
 
-      <div className="flex h-[calc(100vh-4rem)] gap-6">
+      <div className="flex flex-col gap-6 md:h-[calc(100vh-4rem)] md:flex-row">
         {/* Left: Scanner + Product list */}
         <div className="flex flex-1 flex-col min-w-0">
           {/* Header */}
@@ -410,7 +411,7 @@ export default function POSPage() {
                 </button>
               )}
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-auto">
               {cart.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
                   <ScanBarcode className="mb-4 h-16 w-16 opacity-15" />
@@ -468,7 +469,7 @@ export default function POSPage() {
         </div>
 
         {/* Right: Totals Panel */}
-        <div className="w-80 flex flex-col gap-4 shrink-0">
+        <div className="flex w-full shrink-0 flex-col gap-4 md:w-80">
           {/* Total Card */}
           <div className="rounded-2xl border border-border/50 bg-card p-6 shadow-lg">
             <p className="text-sm font-medium text-muted-foreground mb-2">Total a cobrar</p>

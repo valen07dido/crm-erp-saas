@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { ImageUploadField } from '@/components/ui/image-upload-field';
+import { alertMessage, toastSuccess, confirmAction } from '@/lib/alerts';
 import {
   Package,
   Plus,
@@ -127,7 +128,7 @@ export default function ProductsPage() {
 
   const handleDelete = async (id: string) => {
     if (!businessId) return;
-    if (!confirm('¿Estás seguro de eliminar este producto?')) return;
+    if (!(await confirmAction('¿Estás seguro de eliminar este producto?', 'Sí, eliminar'))) return;
     try {
       await fetch(`/api/products?id=${id}`, {
         method: 'DELETE',
@@ -150,7 +151,7 @@ export default function ProductsPage() {
         const text = event.target?.result as string;
         const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         if (lines.length < 2) {
-          alert('El archivo CSV debe tener al menos una cabecera y una fila de datos');
+          alertMessage('El archivo CSV debe tener al menos una cabecera y una fila de datos', 'warning');
           return;
         }
 
@@ -172,15 +173,15 @@ export default function ProductsPage() {
 
         if (res.ok) {
           const data = await res.json();
-          alert(`¡Se importaron ${data.count} productos exitosamente!`);
+          toastSuccess(`¡Se importaron ${data.count} productos exitosamente!`);
           fetchProducts(businessId);
           setShowImportModal(false);
         } else {
-          alert('Error importando productos');
+          alertMessage('Error importando productos');
         }
       } catch (err) {
         console.error(err);
-        alert('Error procesando el archivo CSV. Asegúrese de que el formato sea correcto.');
+        alertMessage('Error procesando el archivo CSV. Asegúrese de que el formato sea correcto.');
       } finally {
         setImporting(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -244,6 +245,7 @@ export default function ProductsPage() {
 
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-border/50 bg-card shadow-lg">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border/50 bg-muted/30">
@@ -324,6 +326,7 @@ export default function ProductsPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Modal */}
@@ -362,7 +365,7 @@ export default function ProductsPage() {
                 </label>
                 <input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm font-mono transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="7501000000000" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-1.5 block text-sm font-medium">Precio</label>
                   <input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="0.00" />

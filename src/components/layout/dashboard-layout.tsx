@@ -6,6 +6,7 @@ import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { InactivityTimer } from '@/components/auth/inactivity-timer';
 import { isAccountActive, isModuleAllowed } from '@/lib/plans';
+import { cn } from '@/lib/utils';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -16,6 +17,13 @@ type AccessStatus = 'loading' | 'ok' | 'blocked' | 'locked-module';
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const [status, setStatus] = useState<AccessStatus>('loading');
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Close the mobile drawer whenever the route changes (e.g. browser back/forward).
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [router.pathname]);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,9 +85,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       <InactivityTimer />
-      <Sidebar />
-      <div className="ml-[260px] transition-all duration-300">
-        <Header />
+      <Sidebar
+        collapsed={collapsed}
+        onToggleCollapsed={() => setCollapsed((c) => !c)}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
+      />
+      <div className={cn('transition-all duration-300', collapsed ? 'md:ml-[72px]' : 'md:ml-[260px]')}>
+        <Header onOpenMobileNav={() => setMobileNavOpen(true)} />
         {locked ? (
           <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-6 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10">

@@ -1,3 +1,5 @@
+import { alertMessage } from '@/lib/alerts';
+
 /**
  * Convierte un arreglo de objetos a un archivo CSV y desencadena su descarga
  * @param data Arreglo de objetos (filas) a exportar
@@ -5,7 +7,7 @@
  */
 export function exportToCSV(data: any[], filename: string) {
   if (!data || !data.length) {
-    alert("No hay datos para exportar");
+    alertMessage('No hay datos para exportar', 'warning');
     return;
   }
 
