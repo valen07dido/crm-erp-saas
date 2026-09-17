@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { ImageUploadField } from '@/components/ui/image-upload-field';
-import { Settings, Save, Store, CreditCard, Palette, Globe } from 'lucide-react';
+import { Settings, Save, Store, CreditCard, Palette, Globe, Printer } from 'lucide-react';
 import { alertMessage, toastSuccess } from '@/lib/alerts';
 
 export default function SettingsPage() {
@@ -11,8 +11,14 @@ export default function SettingsPage() {
 
   // Business states
   const [name, setName] = useState('');
+  const [businessId, setBusinessId] = useState<string | null>(null);
   const [currency, setCurrency] = useState('USD');
   const [taxRate, setTaxRate] = useState('0');
+  const [shiftCutoffHour, setShiftCutoffHour] = useState('14');
+  const [shiftMorningLabel, setShiftMorningLabel] = useState('Turno Mañana');
+  const [shiftNightLabel, setShiftNightLabel] = useState('Turno Noche');
+  const [ticketWidthMm, setTicketWidthMm] = useState('58');
+  const [printTicketOnSale, setPrintTicketOnSale] = useState(true);
 
   // Storefront states
   const [sf, setSf] = useState({
@@ -34,7 +40,23 @@ export default function SettingsPage() {
           const data = await meRes.json();
           setBusiness(data.business);
           setName(data.business.name);
-          
+          setBusinessId(data.business.id);
+
+          // Fetch business settings (currency, tax rate, turnos)
+          const bsRes = await fetch('/api/business-settings', {
+            headers: { 'x-business-id': data.business.id }
+          });
+          if (bsRes.ok) {
+            const bsData = await bsRes.json();
+            setCurrency(bsData.currency || 'USD');
+            setTaxRate(String(bsData.taxRate ?? 0));
+            setShiftCutoffHour(String(bsData.shiftCutoffHour ?? 14));
+            setShiftMorningLabel(bsData.shiftMorningLabel || 'Turno Mañana');
+            setShiftNightLabel(bsData.shiftNightLabel || 'Turno Noche');
+            setTicketWidthMm(String(bsData.ticketWidthMm ?? 58));
+            setPrintTicketOnSale(bsData.printTicketOnSale ?? true);
+          }
+
           // Fetch storefront settings
           const sfRes = await fetch('/api/storefront-settings', {
             headers: { 'x-business-id': data.business.id }
@@ -66,11 +88,29 @@ export default function SettingsPage() {
 
   const handleBusinessSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!businessId) return;
     setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
+    try {
+      await fetch('/api/business-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
+        body: JSON.stringify({
+          currency,
+          taxRate: parseFloat(taxRate) || 0,
+          shiftCutoffHour: parseInt(shiftCutoffHour, 10) || 0,
+          shiftMorningLabel,
+          shiftNightLabel,
+          ticketWidthMm: parseInt(ticketWidthMm, 10) || 58,
+          printTicketOnSale,
+        }),
+      });
       toastSuccess('Configuración guardada exitosamente');
-    }, 1000);
+    } catch (e) {
+      console.error('Error saving business settings', e);
+      alertMessage('Error guardando la configuración');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleStorefrontSubmit = async (e: React.FormEvent) => {
@@ -273,12 +313,83 @@ export default function SettingsPage() {
                       </div>
                       <div>
                         <label className="mb-1.5 block text-sm font-medium">Tasa de Impuesto (%)</label>
-                        <input 
+                        <input
                           type="number"
-                          value={taxRate} 
+                          value={taxRate}
                           onChange={(e) => setTaxRate(e.target.value)}
-                          className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring" 
+                          className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
                         />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-border/50">
+                    <h3 className="mb-1 font-medium">Turnos (para el reporte por turno)</h3>
+                    <p className="mb-4 text-xs text-muted-foreground">
+                      Definí la hora que separa el turno de la mañana del turno de la noche.
+                    </p>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium">Hora de corte</label>
+                        <select
+                          value={shiftCutoffHour}
+                          onChange={(e) => setShiftCutoffHour(e.target.value)}
+                          className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
+                        >
+                          {Array.from({ length: 24 }, (_, h) => (
+                            <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium">Nombre turno mañana</label>
+                        <input
+                          value={shiftMorningLabel}
+                          onChange={(e) => setShiftMorningLabel(e.target.value)}
+                          className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium">Nombre turno noche</label>
+                        <input
+                          value={shiftNightLabel}
+                          onChange={(e) => setShiftNightLabel(e.target.value)}
+                          className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-border/50">
+                    <h3 className="mb-1 font-medium flex items-center gap-2">
+                      <Printer className="h-4 w-4 text-primary" />
+                      Impresión de Tickets
+                    </h3>
+                    <p className="mb-4 text-xs text-muted-foreground">
+                      Ancho del papel de tu impresora térmica (58mm es el ancho posnet más común; 80mm es el otro tamaño habitual).
+                    </p>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium">Ancho del ticket</label>
+                        <select
+                          value={ticketWidthMm}
+                          onChange={(e) => setTicketWidthMm(e.target.value)}
+                          className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
+                        >
+                          <option value="58">58mm (posnet)</option>
+                          <option value="80">80mm</option>
+                        </select>
+                      </div>
+                      <div className="flex items-end pb-1">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={printTicketOnSale}
+                            onChange={(e) => setPrintTicketOnSale(e.target.checked)}
+                            className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                          />
+                          <span className="text-sm font-medium">Imprimir automáticamente al cerrar una venta</span>
+                        </label>
                       </div>
                     </div>
                   </div>

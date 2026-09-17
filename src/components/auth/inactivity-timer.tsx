@@ -1,58 +1,66 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { signOut } from 'next-auth/react';
+import { useSession, signOut, getSession } from 'next-auth/react';
 import { AlertTriangle, LogOut } from 'lucide-react';
 
-const WARNING_MS = 28 * 60 * 1000;   // 28 min
-const LOGOUT_MS  = 30 * 60 * 1000;   // 30 min
+// The JWT session has a fixed (non-sliding) expiry — see maxAge in src/lib/auth.ts.
+// This timer is scheduled off that real expiry timestamp, not off user activity,
+// so the warning/logout actually fire even if the cashier never stops clicking.
+const WARNING_LEAD_MS = 2 * 60 * 1000; // show the dialog 2 min before the token expires
 
 export function InactivityTimer() {
+  const { update } = useSession();
   const [showWarning, setShowWarning] = useState(false);
-  const [countdown, setCountdown]     = useState(120); // seconds until logout
-  const warnTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [countdown, setCountdown] = useState(120); // seconds until logout
+  const warnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const countRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const clearAllTimers = useCallback(() => {
-    if (warnTimer.current)  clearTimeout(warnTimer.current);
+    if (warnTimer.current) clearTimeout(warnTimer.current);
     if (logoutTimer.current) clearTimeout(logoutTimer.current);
-    if (countRef.current)   clearInterval(countRef.current);
+    if (countRef.current) clearInterval(countRef.current);
   }, []);
 
-  const reset = useCallback(() => {
+  const scheduleFromExpiry = useCallback((expiresAt: number) => {
     clearAllTimers();
     setShowWarning(false);
-    setCountdown(120);
+    const msLeft = expiresAt - Date.now();
 
+    if (msLeft <= 0) {
+      signOut({ callbackUrl: '/auth/login?reason=expired' });
+      return;
+    }
+
+    const warnIn = Math.max(msLeft - WARNING_LEAD_MS, 0);
     warnTimer.current = setTimeout(() => {
       setShowWarning(true);
-      setCountdown(120);
-      // Start countdown
+      setCountdown(Math.round(Math.min(WARNING_LEAD_MS, msLeft) / 1000));
       countRef.current = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            clearInterval(countRef.current!);
-            return 0;
-          }
-          return prev - 1;
-        });
+        setCountdown((prev) => (prev <= 1 ? 0 : prev - 1));
       }, 1000);
-    }, WARNING_MS);
+    }, warnIn);
 
     logoutTimer.current = setTimeout(() => {
-      signOut({ callbackUrl: '/auth/login?reason=timeout' });
-    }, LOGOUT_MS);
+      signOut({ callbackUrl: '/auth/login?reason=expired' });
+    }, msLeft);
   }, [clearAllTimers]);
 
+  const refreshFromSession = useCallback(async () => {
+    const session = await getSession();
+    if (!session?.expires) return;
+    scheduleFromExpiry(new Date(session.expires).getTime());
+  }, [scheduleFromExpiry]);
+
   useEffect(() => {
-    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-    const handler = () => reset();
-    events.forEach(e => window.addEventListener(e, handler, { passive: true }));
-    reset(); // start timers
-    return () => {
-      events.forEach(e => window.removeEventListener(e, handler));
-      clearAllTimers();
-    };
-  }, [reset, clearAllTimers]);
+    refreshFromSession();
+    return () => clearAllTimers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleContinue = async () => {
+    await update();
+    await refreshFromSession();
+  };
 
   if (!showWarning) return null;
 
@@ -68,7 +76,7 @@ export function InactivityTimer() {
           </div>
           <h2 className="mb-2 text-xl font-bold">Sesión a punto de expirar</h2>
           <p className="mb-2 text-sm text-muted-foreground">
-            Tu sesión cerrará por inactividad en:
+            Tu sesión cerrará en:
           </p>
           <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full border-4 border-amber-400/40 text-3xl font-black tabular-nums text-amber-400">
             {countdown}
@@ -85,7 +93,7 @@ export function InactivityTimer() {
               Cerrar sesión
             </button>
             <button
-              onClick={reset}
+              onClick={handleContinue}
               className="flex flex-1 items-center justify-center gap-2 rounded-lg gradient-primary py-2.5 text-sm font-medium text-white shadow-lg transition-all hover:brightness-110"
             >
               Continuar

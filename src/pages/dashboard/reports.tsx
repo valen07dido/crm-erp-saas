@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { BarChart3, TrendingUp, TrendingDown, DollarSign, Package, Users } from 'lucide-react';
+import { BarChart3, TrendingUp, TrendingDown, DollarSign, Package, Users, Sunrise, Moon } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -24,23 +24,39 @@ interface AdvancedReports {
   topClients: { id: string; name: string; purchases: number; spent: number }[];
 }
 
+function toLocalDateInputValue(date: Date): string {
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60000).toISOString().split('T')[0];
+}
+
 export default function ReportsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [advanced, setAdvanced] = useState<AdvancedReports | null>(null);
   const [loading, setLoading] = useState(true);
+  const [shiftCutoffHour, setShiftCutoffHour] = useState(14);
+  const [shiftMorningLabel, setShiftMorningLabel] = useState('Turno Mañana');
+  const [shiftNightLabel, setShiftNightLabel] = useState('Turno Noche');
+  const [shiftDate, setShiftDate] = useState(() => toLocalDateInputValue(new Date()));
 
   const fetchTransactions = async (bId: string) => {
     try {
-      const [transRes, advRes] = await Promise.all([
+      const [transRes, advRes, bsRes] = await Promise.all([
         fetch('/api/transactions', { headers: { 'x-business-id': bId } }),
-        fetch('/api/reports/advanced', { headers: { 'x-business-id': bId } })
+        fetch('/api/reports/advanced', { headers: { 'x-business-id': bId } }),
+        fetch('/api/business-settings', { headers: { 'x-business-id': bId } }),
       ]);
-      
+
       if (transRes.ok) {
         setTransactions(await transRes.json());
       }
       if (advRes.ok) {
         setAdvanced(await advRes.json());
+      }
+      if (bsRes.ok) {
+        const bs = await bsRes.json();
+        setShiftCutoffHour(bs.shiftCutoffHour ?? 14);
+        setShiftMorningLabel(bs.shiftMorningLabel || 'Turno Mañana');
+        setShiftNightLabel(bs.shiftNightLabel || 'Turno Noche');
       }
     } catch (e) {
       console.error('Error fetching reports', e);
@@ -63,6 +79,19 @@ export default function ReportsPage() {
     };
     init();
   }, []);
+
+  const shiftSummary = useMemo(() => {
+    const dayIncome = transactions.filter(
+      (t) => t.type === 'INCOME' && toLocalDateInputValue(new Date(t.date)) === shiftDate
+    );
+    const morning = dayIncome.filter((t) => new Date(t.date).getHours() < shiftCutoffHour);
+    const night = dayIncome.filter((t) => new Date(t.date).getHours() >= shiftCutoffHour);
+    const sum = (arr: Transaction[]) => arr.reduce((acc, t) => acc + Number(t.amount), 0);
+    return {
+      morning: { total: sum(morning), count: morning.length },
+      night: { total: sum(night), count: night.length },
+    };
+  }, [transactions, shiftDate, shiftCutoffHour]);
 
   const totalIncome = transactions.filter(t => t.type === 'INCOME').reduce((acc, curr) => acc + Number(curr.amount), 0);
   const totalExpense = transactions.filter(t => t.type === 'EXPENSE').reduce((acc, curr) => acc + Number(curr.amount), 0);
@@ -141,6 +170,47 @@ export default function ReportsPage() {
             </div>
           </div>
           
+          {/* Shift report */}
+          <div className="col-span-1 rounded-xl border border-border/50 bg-card p-6 shadow-lg md:col-span-3">
+            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-muted-foreground" />
+                <h3 className="font-semibold text-lg">Ventas por Turno</h3>
+              </div>
+              <input
+                type="date"
+                value={shiftDate}
+                onChange={(e) => setShiftDate(e.target.value)}
+                className="h-10 rounded-lg border border-input bg-background/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex items-center gap-4 rounded-xl border border-border/50 bg-muted/20 p-5">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+                  <Sunrise className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">{shiftMorningLabel}</p>
+                  <h3 className="text-2xl font-bold">${shiftSummary.morning.total.toFixed(2)}</h3>
+                  <p className="text-xs text-muted-foreground">{shiftSummary.morning.count} venta{shiftSummary.morning.count === 1 ? '' : 's'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 rounded-xl border border-border/50 bg-muted/20 p-5">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
+                  <Moon className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">{shiftNightLabel}</p>
+                  <h3 className="text-2xl font-bold">${shiftSummary.night.total.toFixed(2)}</h3>
+                  <p className="text-xs text-muted-foreground">{shiftSummary.night.count} venta{shiftSummary.night.count === 1 ? '' : 's'}</p>
+                </div>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              El corte de turno se configura en Configuración → Preferencias Financieras.
+            </p>
+          </div>
+
           {/* Chart Section */}
           <div className="col-span-1 rounded-xl border border-border/50 bg-card p-6 shadow-lg md:col-span-3">
             <div className="flex items-center gap-2 mb-6">

@@ -6,6 +6,7 @@ import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { InactivityTimer } from '@/components/auth/inactivity-timer';
 import { isAccountActive, isModuleAllowed } from '@/lib/plans';
+import { isModuleAllowedForRole } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
 interface DashboardLayoutProps {
@@ -30,15 +31,23 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     const checkAccess = async () => {
       try {
         const res = await fetch('/api/me');
+        if (res.status === 401) {
+          if (!cancelled) router.replace('/auth/login?reason=expired');
+          return;
+        }
         if (!res.ok) {
           if (!cancelled) setStatus('ok');
           return;
         }
-        const { business } = await res.json();
+        const { business, role } = await res.json();
         if (cancelled) return;
         if (!business || !isAccountActive(business)) {
           setStatus('blocked');
           return;
+        }
+        if (!isModuleAllowedForRole(role, router.pathname)) {
+          router.replace('/dashboard/pos');
+          return; // keep showing the loading spinner until the redirect lands
         }
         setStatus(isModuleAllowed(business.planName, router.pathname) ? 'ok' : 'locked-module');
       } catch {

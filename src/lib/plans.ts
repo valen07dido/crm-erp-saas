@@ -8,6 +8,7 @@ const BASIC_MODULES = [
   '/dashboard/sales',
   '/dashboard/tutorials',
   '/dashboard/settings',
+  '/dashboard/team',
 ];
 
 const PRO_MODULES = [

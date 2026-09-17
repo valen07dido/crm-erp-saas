@@ -54,8 +54,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             for (const comboItem of combo.items) {
               const product = await tx.product.findUnique({ where: { id: comboItem.productId } });
               if (!product) throw new Error(`Product not found: ${comboItem.productId}`);
-              const needed = comboItem.quantity * item.quantity;
-              if (product.stock < needed) throw new Error(`Stock insuficiente de ${product.name} para el combo ${combo.name}`);
+              const needed = Number(comboItem.quantity) * item.quantity;
+              if (Number(product.stock) < needed) throw new Error(`Stock insuficiente de ${product.name} para el combo ${combo.name}`);
             }
 
             const itemTotal = Number(combo.price) * item.quantity;
@@ -73,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             for (const comboItem of combo.items) {
               await tx.product.update({
                 where: { id: comboItem.productId },
-                data: { stock: { decrement: comboItem.quantity * item.quantity } },
+                data: { stock: { decrement: Number(comboItem.quantity) * item.quantity } },
               });
             }
             continue;
@@ -81,7 +81,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
           const product = await tx.product.findUnique({ where: { id: item.productId } });
           if (!product) throw new Error(`Product not found: ${item.productId}`);
-          if (product.stock < item.quantity) throw new Error(`Insufficient stock for ${product.name}`);
+          if (Number(product.stock) < item.quantity) throw new Error(`Insufficient stock for ${product.name}`);
 
           const itemTotal = Number(product.price) * item.quantity;
           total += itemTotal;
@@ -173,7 +173,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               for (const comboItem of item.combo.items) {
                 await tx.product.update({
                   where: { id: comboItem.productId },
-                  data: { stock: { increment: comboItem.quantity * item.quantity } },
+                  data: { stock: { increment: Number(comboItem.quantity) * Number(item.quantity) } },
                 });
               }
               continue;

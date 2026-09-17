@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import { isModuleAllowed } from '@/lib/plans';
+import { isModuleAllowedForRole } from '@/lib/roles';
 import {
   LayoutDashboard,
   Package,
@@ -23,6 +24,7 @@ import {
   BookOpen,
   Gift,
   X,
+  UserCog,
 } from 'lucide-react';
 
 const menuItems = [
@@ -38,6 +40,7 @@ const menuItems = [
   { label: 'Gastos', icon: DollarSign, href: '/dashboard/expenses' },
   { label: 'Reportes', icon: BarChart3, href: '/dashboard/reports' },
   { label: 'Tienda Online', icon: Store, href: '/dashboard/store' },
+  { label: 'Usuarios', icon: UserCog, href: '/dashboard/team', adminOnly: true },
   { label: 'Tutoriales', icon: BookOpen, href: '/dashboard/tutorials' },
   { label: 'Configuración', icon: Settings, href: '/dashboard/settings' },
 ];
@@ -54,15 +57,17 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
   const [businessName, setBusinessName] = useState('MiNegocio');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [planName, setPlanName] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
     const loadBranding = async () => {
       try {
         const meRes = await fetch('/api/me');
         if (!meRes.ok) return;
-        const { business } = await meRes.json();
+        const { business, role: currentRole } = await meRes.json();
         if (business?.name) setBusinessName(business.name);
         if (business?.planName) setPlanName(business.planName);
+        if (currentRole) setRole(currentRole);
 
         // Try to load storefront settings for logo
         const sfRes = await fetch('/api/storefront-settings', {
@@ -77,9 +82,10 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
     loadBranding();
   }, []);
 
-  const visibleMenuItems = planName
-    ? menuItems.filter((item) => isModuleAllowed(planName, item.href))
-    : menuItems;
+  const visibleMenuItems = menuItems
+    .filter((item) => !planName || isModuleAllowed(planName, item.href))
+    .filter((item) => isModuleAllowedForRole(role, item.href))
+    .filter((item) => !item.adminOnly || role !== 'POS');
 
   return (
     <>
@@ -106,9 +112,8 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
               {logoUrl ? (
                 <img src={logoUrl} alt={businessName} className="h-9 w-9 rounded-lg object-cover shadow-md" />
               ) : (
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg gradient-primary shadow-md">
-                  <Store className="h-4.5 w-4.5 text-white" />
-                </div>
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src="/logo.png" alt="Walti" className="h-9 w-9 object-contain" />
               )}
               <span className="truncate text-lg font-bold gradient-text">{businessName}</span>
             </Link>
@@ -118,9 +123,8 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
               {logoUrl ? (
                 <img src={logoUrl} alt={businessName} className="h-9 w-9 rounded-lg object-cover shadow-md" />
               ) : (
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg gradient-primary shadow-md">
-                  <Store className="h-4.5 w-4.5 text-white" />
-                </div>
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src="/logo.png" alt="Walti" className="h-9 w-9 object-contain" />
               )}
             </Link>
           )}

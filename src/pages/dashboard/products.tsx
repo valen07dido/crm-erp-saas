@@ -12,6 +12,8 @@ import {
   AlertCircle,
   Upload,
   DownloadCloud,
+  CalendarClock,
+  Scale,
 } from 'lucide-react';
 
 interface Product {
@@ -23,6 +25,15 @@ interface Product {
   imageUrl: string | null;
   barcode: string | null;
   createdAt: string;
+  expirationDate: string | null;
+  soldByWeight: boolean;
+}
+
+const DAYS_UNTIL_EXPIRY_WARNING = 7;
+
+function daysUntil(dateStr: string): number {
+  const diffMs = new Date(dateStr).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0);
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
 }
 
 export default function ProductsPage() {
@@ -30,13 +41,20 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [form, setForm] = useState({ name: '', description: '', price: '', stock: '', imageUrl: '', barcode: '' });
+  const [form, setForm] = useState({
+    name: '', description: '', price: '', stock: '', imageUrl: '', barcode: '',
+    expirationDate: '', soldByWeight: false,
+  });
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [stockFilter, setStockFilter] = useState<'all' | 'low' | 'out'>('all');
+  const [expiryFilter, setExpiryFilter] = useState<'all' | 'soon' | 'expired'>('all');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
 
   const fetchProducts = async (bId: string) => {
     try {
@@ -72,7 +90,10 @@ export default function ProductsPage() {
 
   const openCreateModal = () => {
     setEditingProduct(null);
-    setForm({ name: '', description: '', price: '', stock: '', imageUrl: '', barcode: '' });
+    setForm({
+      name: '', description: '', price: '', stock: '', imageUrl: '', barcode: '',
+      expirationDate: '', soldByWeight: false,
+    });
     setShowModal(true);
   };
 
@@ -85,6 +106,8 @@ export default function ProductsPage() {
       stock: String(product.stock),
       imageUrl: product.imageUrl || '',
       barcode: product.barcode || '',
+      expirationDate: product.expirationDate ? product.expirationDate.split('T')[0] : '',
+      soldByWeight: product.soldByWeight,
     });
     setShowModal(true);
   };
@@ -98,9 +121,11 @@ export default function ProductsPage() {
         name: form.name,
         description: form.description || null,
         price: parseFloat(form.price) || 0,
-        stock: parseInt(form.stock) || 0,
+        stock: parseFloat(form.stock) || 0,
         imageUrl: form.imageUrl || null,
         barcode: form.barcode || null,
+        expirationDate: form.expirationDate || null,
+        soldByWeight: form.soldByWeight,
       };
 
       if (editingProduct) {
@@ -201,10 +226,37 @@ export default function ProductsPage() {
     document.body.removeChild(link);
   };
 
-  const filteredProducts = products.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (p.barcode || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProducts = products.filter((p) => {
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      p.name.toLowerCase().includes(q) ||
+      (p.barcode || '').toLowerCase().includes(q) ||
+      (p.description || '').toLowerCase().includes(q);
+    if (!matchesSearch) return false;
+
+    if (stockFilter === 'low' && !(Number(p.stock) > 0 && Number(p.stock) <= 20)) return false;
+    if (stockFilter === 'out' && Number(p.stock) > 0) return false;
+
+    if (expiryFilter !== 'all') {
+      if (!p.expirationDate) return false;
+      const days = daysUntil(p.expirationDate);
+      if (expiryFilter === 'expired' && days >= 0) return false;
+      if (expiryFilter === 'soon' && (days < 0 || days > DAYS_UNTIL_EXPIRY_WARNING)) return false;
+    }
+
+    return true;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
+  const paginatedProducts = filteredProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, stockFilter, expiryFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   return (
     <DashboardLayout>
@@ -231,16 +283,44 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative mb-6 max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="text"
-          placeholder="Buscar producto..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-10 w-full rounded-lg border border-input bg-background/50 pl-10 pr-4 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30"
-        />
+      {/* Search & filters */}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative max-w-sm flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Buscar por nombre, descripción o código..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-10 w-full rounded-lg border border-input bg-background/50 pl-10 pr-4 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30"
+          />
+        </div>
+        <select
+          value={stockFilter}
+          onChange={(e) => setStockFilter(e.target.value as typeof stockFilter)}
+          className="h-10 rounded-lg border border-input bg-background/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30"
+        >
+          <option value="all">Todo el stock</option>
+          <option value="low">Stock bajo</option>
+          <option value="out">Sin stock</option>
+        </select>
+        <select
+          value={expiryFilter}
+          onChange={(e) => setExpiryFilter(e.target.value as typeof expiryFilter)}
+          className="h-10 rounded-lg border border-input bg-background/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30"
+        >
+          <option value="all">Todos los vencimientos</option>
+          <option value="soon">Por vencer</option>
+          <option value="expired">Vencidos</option>
+        </select>
+        {(searchQuery || stockFilter !== 'all' || expiryFilter !== 'all') && (
+          <button
+            onClick={() => { setSearchQuery(''); setStockFilter('all'); setExpiryFilter('all'); }}
+            className="h-10 whitespace-nowrap rounded-lg border border-border px-3 text-sm text-muted-foreground transition-colors hover:bg-accent"
+          >
+            Limpiar filtros
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -271,38 +351,65 @@ export default function ProductsPage() {
                 <td colSpan={5} className="px-6 py-16 text-center text-muted-foreground">
                   <div className="flex flex-col items-center">
                     <Package className="mb-3 h-12 w-12 opacity-30" />
-                    <p className="text-sm">No hay productos registrados</p>
-                    <p className="text-xs">Haz clic en "Nuevo producto" para agregar uno</p>
+                    <p className="text-sm">
+                      {products.length === 0 ? 'No hay productos registrados' : 'Ningún producto coincide con la búsqueda/filtros'}
+                    </p>
+                    <p className="text-xs">
+                      {products.length === 0 ? 'Haz clic en "Nuevo producto" para agregar uno' : 'Probá con otros términos o limpiá los filtros'}
+                    </p>
                   </div>
                 </td>
               </tr>
             ) : (
-              filteredProducts.map((product, i) => (
+              paginatedProducts.map((product, i) => (
                 <tr
                   key={product.id}
                   className="border-b border-border/30 transition-colors hover:bg-muted/20 animate-fade-in"
                   style={{ animationDelay: `${i * 50}ms` }}
                 >
                   <td className="px-6 py-4">
-                    <div className="font-medium">{product.name}</div>
+                    <div className="font-medium flex items-center gap-1.5">
+                      {product.name}
+                      {product.soldByWeight && (
+                        <span title="Se vende por peso">
+                          <Scale className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        </span>
+                      )}
+                    </div>
                     {product.barcode && (
                       <div className="mt-0.5 font-mono text-xs text-muted-foreground">{product.barcode}</div>
                     )}
+                    {product.expirationDate && (() => {
+                      const days = daysUntil(product.expirationDate);
+                      if (days > DAYS_UNTIL_EXPIRY_WARNING) return null;
+                      return (
+                        <div className={`mt-1 flex items-center gap-1 text-xs font-medium ${days < 0 ? 'text-red-400' : 'text-amber-400'}`}>
+                          <CalendarClock className="h-3 w-3" />
+                          {days < 0
+                            ? `Vencido hace ${Math.abs(days)} día${Math.abs(days) === 1 ? '' : 's'}`
+                            : days === 0
+                            ? 'Vence hoy'
+                            : `Vence en ${days} día${days === 1 ? '' : 's'}`}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-6 py-4 text-muted-foreground">{product.description || '—'}</td>
-                  <td className="px-6 py-4 text-right font-mono">${Number(product.price).toFixed(2)}</td>
+                  <td className="px-6 py-4 text-right font-mono">
+                    ${Number(product.price).toFixed(2)}{product.soldByWeight && <span className="text-xs text-muted-foreground">/kg</span>}
+                  </td>
                   <td className="px-6 py-4 text-right">
                     <span
                       className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        product.stock <= 5
+                        Number(product.stock) <= 5
                           ? 'bg-red-500/15 text-red-400'
-                          : product.stock <= 20
+                          : Number(product.stock) <= 20
                           ? 'bg-amber-500/15 text-amber-400'
                           : 'bg-emerald-500/15 text-emerald-400'
                       }`}
                     >
-                      {product.stock <= 5 && <AlertCircle className="h-3 w-3" />}
-                      {product.stock}
+                      {Number(product.stock) <= 5 && <AlertCircle className="h-3 w-3" />}
+                      {product.soldByWeight ? `${Number(product.stock).toFixed(3)} kg` : Number(product.stock)}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
@@ -327,14 +434,38 @@ export default function ProductsPage() {
           </tbody>
         </table>
         </div>
+        {!loading && filteredProducts.length > 0 && (
+          <div className="flex flex-col gap-3 border-t border-border/50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredProducts.length)} de {filteredProducts.length} producto{filteredProducts.length === 1 ? '' : 's'}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"
+              >
+                Anterior
+              </button>
+              <span className="text-sm text-muted-foreground">Página {page} de {totalPages}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowModal(false)} />
-          <div className="relative w-full max-w-md animate-slide-up rounded-2xl border border-border/50 bg-card p-6 shadow-2xl">
-            <div className="mb-6 flex items-center justify-between">
+          <div className="relative flex max-h-[92vh] w-full max-w-lg flex-col animate-slide-up rounded-2xl border border-border/50 bg-card shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-6 py-4">
               <h2 className="text-lg font-semibold">
                 {editingProduct ? 'Editar producto' : 'Nuevo producto'}
               </h2>
@@ -343,40 +474,71 @@ export default function ProductsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">Nombre *</label>
-                <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="Coca-Cola 500ml" />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">Descripción</label>
-                <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="Bebida gaseosa" />
-              </div>
-              <ImageUploadField
-                label="Imagen del Producto (Opcional)"
-                value={form.imageUrl}
-                onChange={(url) => setForm({ ...form, imageUrl: url })}
-                businessId={businessId}
-              />
-              <div>
-                <label className="mb-1.5 block text-sm font-medium flex items-center gap-2">
-                  Código de Barras
-                  <span className="text-xs font-normal text-muted-foreground">(EAN13, Code128, etc.)</span>
+            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium">Nombre *</label>
+                    <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="Coca-Cola 500ml" />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium">Descripción</label>
+                    <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="Bebida gaseosa" />
+                  </div>
+                </div>
+
+                <ImageUploadField
+                  label="Imagen del Producto (Opcional)"
+                  value={form.imageUrl}
+                  onChange={(url) => setForm({ ...form, imageUrl: url })}
+                  businessId={businessId}
+                />
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium">
+                      Código de Barras <span className="text-xs font-normal text-muted-foreground">(EAN13, etc.)</span>
+                    </label>
+                    <input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm font-mono transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="7501000000000" />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium flex items-center gap-1.5">
+                      <CalendarClock className="h-3.5 w-3.5" />
+                      Vencimiento (Opcional)
+                    </label>
+                    <input
+                      type="date"
+                      value={form.expirationDate}
+                      onChange={(e) => setForm({ ...form, expirationDate: e.target.value })}
+                      className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium">{form.soldByWeight ? 'Precio por Kg' : 'Precio'}</label>
+                    <input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="0.00" />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium">{form.soldByWeight ? 'Stock (Kg)' : 'Stock'}</label>
+                    <input type="number" step={form.soldByWeight ? '0.001' : '1'} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="0" />
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2 rounded-lg border border-border/50 bg-background/50 px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={form.soldByWeight}
+                    onChange={(e) => setForm({ ...form, soldByWeight: e.target.checked })}
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                  />
+                  <Scale className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="text-sm font-medium">Se vende por peso (Kg) — ej: quesos, fiambres, carnes</span>
                 </label>
-                <input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm font-mono transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="7501000000000" />
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium">Precio</label>
-                  <input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="0.00" />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium">Stock</label>
-                  <input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="0" />
-                </div>
               </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex shrink-0 gap-3 border-t border-border/50 px-6 py-4">
                 <button type="button" onClick={() => setShowModal(false)} className="flex h-10 flex-1 items-center justify-center rounded-lg border border-border text-sm font-medium transition-all duration-200 hover:bg-accent">
                   Cancelar
                 </button>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Truck, Plus, X, Search, PackageOpen, Download, FileUp, Trash2, Percent } from 'lucide-react';
+import { Truck, Plus, X, Search, PackageOpen, Download, FileUp, Trash2, Percent, Eye, Gift } from 'lucide-react';
 import { exportToCSV } from '@/lib/export';
 import { alertMessage, toastSuccess } from '@/lib/alerts';
 
@@ -39,6 +39,7 @@ export default function PurchasesPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [viewingPurchase, setViewingPurchase] = useState<Purchase | null>(null);
   
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -345,12 +346,13 @@ export default function PurchasesPage() {
               <th className="px-6 py-4 text-left font-medium text-muted-foreground">Fecha</th>
               <th className="px-6 py-4 text-left font-medium text-muted-foreground">Proveedor</th>
               <th className="px-6 py-4 text-right font-medium text-muted-foreground">Total</th>
+              <th className="px-6 py-4 text-right font-medium text-muted-foreground">Detalle</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={4} className="px-6 py-16 text-center text-muted-foreground">
+                <td colSpan={5} className="px-6 py-16 text-center text-muted-foreground">
                   <div className="flex flex-col items-center">
                     <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
                     <p className="mt-3 text-sm">Cargando compras...</p>
@@ -359,7 +361,7 @@ export default function PurchasesPage() {
               </tr>
             ) : filteredPurchases.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-16 text-center text-muted-foreground">
+                <td colSpan={5} className="px-6 py-16 text-center text-muted-foreground">
                   <div className="flex flex-col items-center">
                     <PackageOpen className="mb-3 h-12 w-12 opacity-30" />
                     <p className="text-sm">No hay compras registradas</p>
@@ -370,13 +372,23 @@ export default function PurchasesPage() {
               filteredPurchases.map((purchase, i) => (
                 <tr
                   key={purchase.id}
-                  className="border-b border-border/30 transition-colors hover:bg-muted/20 animate-fade-in"
+                  className="border-b border-border/30 transition-colors hover:bg-muted/20 animate-fade-in cursor-pointer"
                   style={{ animationDelay: `${i * 50}ms` }}
+                  onClick={() => setViewingPurchase(purchase)}
                 >
                   <td className="px-6 py-4 font-mono font-medium">#{purchase.id.slice(0, 8)}</td>
                   <td className="px-6 py-4 text-muted-foreground">{new Date(purchase.createdAt).toLocaleDateString()}</td>
                   <td className="px-6 py-4 text-muted-foreground">{purchase.supplier?.name || 'Proveedor General'}</td>
                   <td className="px-6 py-4 text-right font-bold text-red-500">${Number(purchase.total).toFixed(2)}</td>
+                  <td className="px-6 py-4 text-right">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setViewingPurchase(purchase); }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      Ver detalle
+                    </button>
+                  </td>
                 </tr>
               ))
             )}
@@ -676,6 +688,65 @@ export default function PurchasesPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Purchase detail modal */}
+      {viewingPurchase && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setViewingPurchase(null)} />
+          <div className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto animate-slide-up rounded-2xl border border-border/50 bg-card p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">Compra #{viewingPurchase.id.slice(0, 8)}</h2>
+                <p className="text-sm text-muted-foreground">
+                  {new Date(viewingPurchase.createdAt).toLocaleDateString()} · {viewingPurchase.supplier?.name || 'Proveedor General'}
+                </p>
+              </div>
+              <button onClick={() => setViewingPurchase(null)} className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="overflow-hidden rounded-lg border border-border/50">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/50 bg-muted/30">
+                    <th className="px-4 py-2 text-left font-medium text-muted-foreground">Producto</th>
+                    <th className="px-4 py-2 text-right font-medium text-muted-foreground">Cant.</th>
+                    <th className="px-4 py-2 text-right font-medium text-muted-foreground">Costo Unit.</th>
+                    <th className="px-4 py-2 text-right font-medium text-muted-foreground">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(viewingPurchase.items || []).length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">Sin productos</td>
+                    </tr>
+                  ) : (
+                    viewingPurchase.items.map((item: any) => (
+                      <tr key={item.id} className="border-b border-border/30 last:border-0">
+                        <td className="px-4 py-2">
+                          <span className="flex items-center gap-1.5">
+                            {item.combo && <Gift className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                            {item.combo?.name || item.product?.name || 'Producto eliminado'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-right">{Number(item.quantity)}</td>
+                        <td className="px-4 py-2 text-right font-mono">${Number(item.price).toFixed(2)}</td>
+                        <td className="px-4 py-2 text-right font-mono font-semibold">${(Number(item.price) * Number(item.quantity)).toFixed(2)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between rounded-lg bg-muted/30 px-4 py-3">
+              <span className="text-sm font-medium">Total de la compra</span>
+              <span className="text-lg font-bold text-red-500">${Number(viewingPurchase.total).toFixed(2)}</span>
+            </div>
           </div>
         </div>
       )}

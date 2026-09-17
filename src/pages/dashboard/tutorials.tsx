@@ -16,6 +16,7 @@ import {
   Store,
   Settings,
   Gift,
+  UserCog,
   LucideIcon,
 } from 'lucide-react';
 
@@ -48,9 +49,13 @@ const sections: Section[] = [
     summary: 'Pantalla pensada para el mostrador: escaneás o buscás productos, arma el carrito y cobrás.',
     tips: [
       'El cursor queda siempre listo en el buscador de arriba — solo escaneá el código de barras y se agrega solo.',
+      'El buscador manual y el botón "Precio" filtran tanto por nombre y código de barras como por la Descripción cargada en el producto.',
       'Usá "Modo Cajero" (pantalla completa) cuando estés atendiendo para no distraerte con el resto del panel.',
       'Botón "Precio": consulta el precio de un producto sin agregarlo a la venta en curso — ideal si un cliente pregunta un precio a mitad de un cobro.',
       'Al cobrar, podés elegir Efectivo, Tarjeta o Transferencia; con Efectivo te calcula el vuelto automáticamente.',
+      'Si un producto está marcado como "se vende por peso" (ej: quesos, fiambres), al escanearlo o buscarlo te va a pedir el peso antes de agregarlo — podés ingresarlo en Kg o en gramos con el botón KG/G al lado del campo, y el precio se calcula solo.',
+      'Antes de confirmar el cobro podés destildar "Imprimir ticket de esta venta" si por esa venta puntual no querés imprimir nada — la venta se registra igual, solo que sin el ticket. El valor por defecto de ese casillero (tildado o no) se configura en Configuración.',
+      'Al cerrar una venta con el ticket activado, se imprime automáticamente en la impresora predeterminada de la PC (se abre el diálogo de impresión de Windows) — el ancho del papel (58mm por defecto, tipo posnet) se configura en Configuración. También podés reimprimirlo con el ícono de impresora en el aviso de "Venta registrada".',
     ],
   },
   {
@@ -60,10 +65,14 @@ const sections: Section[] = [
     color: 'text-primary',
     summary: 'Acá administrás todo tu catálogo: nombre, precio, stock, código de barras e imagen de cada producto.',
     tips: [
-      'El buscador de arriba filtra por nombre o código de barras al mismo tiempo.',
+      'El buscador de arriba filtra por nombre, descripción o código de barras al mismo tiempo.',
+      'Los desplegables "Todo el stock" y "Todos los vencimientos" te dejan filtrar rápido por productos con stock bajo/sin stock o por vencer/vencidos — "Limpiar filtros" los resetea junto con la búsqueda.',
+      'La lista se pagina de a 20 productos para que no quede una tabla eterna — usá "Anterior"/"Siguiente" para moverte entre páginas.',
       'Para la foto del producto usá el botón "Subir imagen" (no hace falta tener la imagen alojada en otro lado) — se sube directamente desde tu computadora o celular.',
       '"Importar CSV" sirve para cargar muchos productos de una sola vez desde una planilla.',
       'El ícono de stock se pone naranja/rojo cuando queda poco — es tu aviso para reponer.',
+      'Marcá "Se vende por peso (Kg)" para productos como quesos, fiambres o carnes — el precio pasa a ser por kilo y en el Punto de Venta te va a pedir el peso en vez de una cantidad entera.',
+      'Cargá la "Fecha de Vencimiento" en productos perecederos — cuando falten 7 días o menos (o ya esté vencido) aparece un aviso en rojo/naranja debajo del nombre del producto en esta misma lista.',
     ],
   },
   {
@@ -124,6 +133,7 @@ const sections: Section[] = [
       '"Importar Factura PDF" es el atajo grande: subís el PDF (lista de precios o factura) de tu proveedor, el sistema intenta leer los productos y precios automáticamente, vos definís el % de ganancia que le querés agregar, y confirmás — los productos se crean o actualizan ya con el precio de venta calculado.',
       'Como la lectura del PDF es automática, siempre revisá la tabla antes de confirmar: puede haber alguna línea mal interpretada, sobre todo en facturas con formatos poco comunes.',
       'Si el proveedor manda la misma lista actualizada más adelante, importarla de nuevo actualiza los precios de los productos existentes en vez de duplicarlos (los reconoce por el código del proveedor).',
+      'Tocá cualquier fila de la lista (o el botón "Ver detalle") para ver exactamente qué productos y cantidades incluyó esa compra.',
     ],
   },
   {
@@ -154,6 +164,7 @@ const sections: Section[] = [
     summary: 'Gráficos y números que resumen cómo le fue al negocio en un período: ventas, ganancias, productos más vendidos.',
     tips: [
       'Usalo antes de tomar decisiones como subir precios o hacer una promoción — te dice qué productos realmente mueven la aguja.',
+      '"Ventas por Turno" separa las ventas de un día en dos franjas horarias (ej: mañana/noche) — muy útil si el negocio cambia de encargado o de cajero a mitad del día. La hora de corte y los nombres de cada turno se configuran en Configuración.',
     ],
   },
   {
@@ -168,6 +179,19 @@ const sections: Section[] = [
     ],
   },
   {
+    id: 'usuarios',
+    title: 'Usuarios',
+    icon: UserCog,
+    color: 'text-cyan-400',
+    summary: 'Solo la ve el Administrador: acá creás logins para tu equipo (empleados) sin compartir tu propia contraseña.',
+    tips: [
+      'Rol "Administrador": acceso completo, igual que vos.',
+      'Rol "Solo Punto de Venta": ese usuario, al iniciar sesión, va directo al Punto de Venta y no puede ver ni tocar el resto del sistema (Productos, Reportes, Configuración, etc.).',
+      'Podés cambiar el rol de un usuario en cualquier momento desde el desplegable de la lista.',
+      'No podés eliminarte ni cambiarte el rol a vos mismo, para evitar quedarte afuera por error.',
+    ],
+  },
+  {
     id: 'configuracion',
     title: 'Configuración',
     icon: Settings,
@@ -175,6 +199,7 @@ const sections: Section[] = [
     summary: 'Datos generales del negocio (nombre, moneda, impuesto) y la personalización de la tienda pública.',
     tips: [
       'La "URL del Tenant" es el link fijo de tu negocio — no se puede editar porque es la dirección de tu tienda online.',
+      'Acá también configurás la hora de corte y los nombres de los turnos que usa el reporte "Ventas por Turno" en Reportes.',
     ],
   },
 ];

@@ -40,7 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let total = 0;
     const saleItems = items.map(item => {
       const product = products.find(p => p.id === item.productId)!;
-      if (product.stock < item.quantity) {
+      if (Number(product.stock) < item.quantity) {
         throw new Error(`Insufficient stock for ${product.name}`);
       }
       const lineTotal = Number(product.price) * item.quantity;

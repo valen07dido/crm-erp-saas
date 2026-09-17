@@ -98,6 +98,15 @@ model BusinessSettings {
   business    Business @relation(fields: [businessId], references: [id])
   currency    String   @default("USD")
   taxRate     Float    @default(0)
+
+  // Fixed-hour cutoff (0-23) splitting each day's sales into two shifts for reporting.
+  shiftCutoffHour   Int    @default(14)
+  shiftMorningLabel String @default("Turno Mañana")
+  shiftNightLabel   String @default("Turno Noche")
+
+  // Receipt/ticket printing (thermal printer paper width in mm — 58 or 80 are common)
+  ticketWidthMm     Int     @default(58)
+  printTicketOnSale Boolean @default(true)
 }
 
 model BusinessUser {
@@ -106,12 +115,14 @@ model BusinessUser {
   userId      String
   businessId  String
   roleId      String
+  // "ADMIN" (full access) or "POS" (Punto de Venta only)
+  role        String   @default("ADMIN")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   user        User     @relation(fields: [userId], references: [id])
   business    Business @relation(fields: [businessId], references: [id])
-  role        Role     @relation(fields: [roleId], references: [id])
+  roleRef     Role     @relation(fields: [roleId], references: [id])
 }
 
 model Role {
@@ -162,9 +173,11 @@ model Product {
   name        String
   description String?
   price       Decimal  @default(0)
-  stock       Int      @default(0)
+  stock       Decimal  @default(0)
   imageUrl    String?
   barcode     String?  // EAN13, Code128, etc.
+  expirationDate DateTime?
+  soldByWeight   Boolean @default(false) // if true, price is per-kg and quantities are in kg
   businessId  String
   business    Business @relation(fields: [businessId], references: [id])
   createdAt   DateTime @default(now())
@@ -200,7 +213,7 @@ model ComboItem {
   combo     Combo   @relation(fields: [comboId], references: [id], onDelete: Cascade)
   productId String
   product   Product @relation(fields: [productId], references: [id])
-  quantity  Int
+  quantity  Decimal
 }
 
 model Client {
@@ -247,7 +260,7 @@ model Sale {
 
 model SaleItem {
   id          String   @id @default(uuid())
-  quantity    Int
+  quantity    Decimal
   price       Decimal
   saleId      String
   sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
@@ -275,7 +288,7 @@ model Purchase {
 
 model PurchaseItem {
   id          String   @id @default(uuid())
-  quantity    Int
+  quantity    Decimal
   price       Decimal
   purchaseId  String
   purchase    Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)

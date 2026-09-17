@@ -30,6 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({
       business: businessUser.business,
+      role: businessUser.role,
     });
   } catch (error) {
     console.error('Error in /api/me:', error);

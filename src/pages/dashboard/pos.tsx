@@ -18,16 +18,21 @@ import {
   Tag,
   AlertCircle,
   Gift,
+  Scale,
+  Printer,
 } from 'lucide-react';
 import { alertMessage } from '@/lib/alerts';
+import { printTicket, TicketData } from '@/lib/printTicket';
 
 interface Product {
   id: string;
   name: string;
+  description: string | null;
   price: number;
   stock: number;
   barcode: string | null;
   imageUrl: string | null;
+  soldByWeight: boolean;
 }
 
 interface ComboItem {
@@ -50,9 +55,11 @@ interface Sellable {
   kind: 'product' | 'combo';
   id: string;
   name: string;
+  description: string | null;
   price: number;
   barcode: string | null;
   stock: number;
+  soldByWeight: boolean;
 }
 
 function comboAvailableStock(combo: Combo, products: Product[]): number {
@@ -60,7 +67,7 @@ function comboAvailableStock(combo: Combo, products: Product[]): number {
   return Math.min(
     ...combo.items.map((ci) => {
       const product = products.find((p) => p.id === ci.productId);
-      return product ? Math.floor(product.stock / ci.quantity) : 0;
+      return product ? Math.floor(Number(product.stock) / ci.quantity) : 0;
     })
   );
 }
@@ -106,6 +113,19 @@ export default function POSPage() {
 
   // Success state
   const [lastSale, setLastSale] = useState<{ id: string; total: number; change: number } | null>(null);
+  const [lastTicket, setLastTicket] = useState<TicketData | null>(null);
+
+  // Receipt printing config
+  const [businessName, setBusinessName] = useState('');
+  const [ticketWidthMm, setTicketWidthMm] = useState(58);
+  const [printTicketOnSale, setPrintTicketOnSale] = useState(true);
+  const [printThisSale, setPrintThisSale] = useState(true);
+
+  // Weight entry prompt (for products sold by weight)
+  const [weightPromptFor, setWeightPromptFor] = useState<Sellable | null>(null);
+  const [weightInput, setWeightInput] = useState('1');
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'g'>('kg');
+  const weightInputRef = useRef<HTMLInputElement>(null);
 
   // Load data
   useEffect(() => {
@@ -115,15 +135,23 @@ export default function POSPage() {
         if (!meRes.ok) return;
         const { business } = await meRes.json();
         setBusinessId(business.id);
+        setBusinessName(business.name || '');
 
-        const [prodRes, comboRes, cliRes] = await Promise.all([
+        const [prodRes, comboRes, cliRes, settingsRes] = await Promise.all([
           fetch('/api/products', { headers: { 'x-business-id': business.id } }),
           fetch('/api/combos', { headers: { 'x-business-id': business.id } }),
           fetch('/api/clients', { headers: { 'x-business-id': business.id } }),
+          fetch('/api/business-settings', { headers: { 'x-business-id': business.id } }),
         ]);
         if (prodRes.ok) setProducts(await prodRes.json());
         if (comboRes.ok) setCombos(await comboRes.json());
         if (cliRes.ok) setClients(await cliRes.json());
+        if (settingsRes.ok) {
+          const settings = await settingsRes.json();
+          setTicketWidthMm(settings.ticketWidthMm ?? 58);
+          setPrintTicketOnSale(settings.printTicketOnSale ?? true);
+          setPrintThisSale(settings.printTicketOnSale ?? true);
+        }
       } catch (e) {
         console.error('POS init error', e);
       } finally {
@@ -135,37 +163,85 @@ export default function POSPage() {
 
   // Keep barcode input focused
   useEffect(() => {
-    if (!payModalOpen && !searchOpen && !priceCheckOpen && barcodeRef.current) {
+    if (!payModalOpen && !searchOpen && !priceCheckOpen && !weightPromptFor && barcodeRef.current) {
       barcodeRef.current.focus();
     }
-  }, [payModalOpen, searchOpen, priceCheckOpen, cart]);
+  }, [payModalOpen, searchOpen, priceCheckOpen, weightPromptFor, cart]);
+
+  // Focus the weight input as soon as the prompt opens
+  useEffect(() => {
+    if (weightPromptFor) {
+      weightInputRef.current?.focus();
+      weightInputRef.current?.select();
+    }
+  }, [weightPromptFor]);
 
   // Combined list of products + active combos, sharing the same searchable shape
   const sellables: Sellable[] = [
-    ...products.map((p) => ({ kind: 'product' as const, id: p.id, name: p.name, price: Number(p.price), barcode: p.barcode, stock: p.stock })),
+    ...products.map((p) => ({ kind: 'product' as const, id: p.id, name: p.name, description: p.description, price: Number(p.price), barcode: p.barcode, stock: Number(p.stock), soldByWeight: p.soldByWeight })),
     ...combos.filter((c) => c.isActive).map((c) => ({
       kind: 'combo' as const,
       id: c.id,
       name: c.name,
+      description: null,
       price: Number(c.price),
       barcode: c.barcode,
       stock: comboAvailableStock(c, products),
+      soldByWeight: false,
     })),
   ];
 
   // Add product/combo to cart
-  const addToCart = useCallback((sellable: Sellable) => {
+  const addToCart = useCallback((sellable: Sellable, quantity: number = 1) => {
     setCart(prev => {
       const existing = prev.find(i => i.kind === sellable.kind && i.id === sellable.id);
       if (existing) {
-        if (existing.quantity >= sellable.stock) return prev; // can't exceed stock
+        const newQuantity = existing.quantity + quantity;
+        if (newQuantity > sellable.stock) return prev; // can't exceed stock
         return prev.map(i =>
-          i.kind === sellable.kind && i.id === sellable.id ? { ...i, quantity: i.quantity + 1 } : i
+          i.kind === sellable.kind && i.id === sellable.id ? { ...i, quantity: newQuantity } : i
         );
       }
-      return [...prev, { ...sellable, quantity: 1 }];
+      if (quantity > sellable.stock) return prev;
+      return [...prev, { ...sellable, quantity }];
     });
   }, []);
+
+  // Weighable products ask for a weight (kg) before joining the cart
+  const handleSelectSellable = (sellable: Sellable) => {
+    if (sellable.soldByWeight) {
+      setWeightPromptFor(sellable);
+      setWeightInput('1');
+      setWeightUnit('kg');
+    } else {
+      addToCart(sellable);
+    }
+  };
+
+  // Weight is always tracked internally in kg (stock, cart quantity, price/kg) —
+  // grams is just an alternate input unit that gets converted before use.
+  const weightInKg = (() => {
+    const n = parseFloat(weightInput);
+    if (!n || n <= 0) return 0;
+    return weightUnit === 'g' ? n / 1000 : n;
+  })();
+
+  const handleWeightUnitChange = (unit: 'kg' | 'g') => {
+    if (unit === weightUnit) return;
+    const current = parseFloat(weightInput);
+    if (!isNaN(current) && current > 0) {
+      const converted = unit === 'g' ? current * 1000 : current / 1000;
+      setWeightInput(String(Number(converted.toFixed(3))));
+    }
+    setWeightUnit(unit);
+  };
+
+  const confirmWeightEntry = () => {
+    if (!weightPromptFor) return;
+    if (weightInKg <= 0) return;
+    addToCart(weightPromptFor, weightInKg);
+    setWeightPromptFor(null);
+  };
 
   // Handle barcode scan (Enter key)
   const handleBarcodeScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -177,7 +253,7 @@ export default function POSPage() {
         s.name.toLowerCase() === code.toLowerCase()
       );
       if (found && found.stock > 0) {
-        addToCart(found);
+        handleSelectSellable(found);
         setBarcodeInput('');
       } else {
         // Flash error (shake effect)
@@ -229,6 +305,19 @@ export default function POSPage() {
 
   const removeItem = (kind: 'product' | 'combo', id: string) => {
     setCart(prev => prev.filter(i => !(i.kind === kind && i.id === id)));
+  };
+
+  // Direct weight entry for weighable items (typed in kg, not stepped by 1)
+  const setItemWeight = (kind: 'product' | 'combo', id: string, weight: number) => {
+    setCart(prev =>
+      prev
+        .map(i => {
+          if (i.kind !== kind || i.id !== id) return i;
+          const clamped = Math.min(Math.max(weight, 0), i.stock);
+          return { ...i, quantity: clamped };
+        })
+        .filter(i => i.quantity > 0)
+    );
   };
 
   const toggleFullscreen = async () => {
@@ -284,6 +373,24 @@ export default function POSPage() {
       }
       const sale = await res.json();
       setLastSale({ id: sale.id, total: cartTotal, change: Math.max(change, 0) });
+
+      const ticket: TicketData = {
+        businessName: businessName || 'Mi Negocio',
+        widthMm: ticketWidthMm,
+        saleId: sale.id,
+        date: new Date(),
+        items: cart.map(i => ({ name: i.name, quantity: i.quantity, price: i.price, soldByWeight: i.soldByWeight })),
+        total: cartTotal,
+        paymentMethod,
+        cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) || undefined : undefined,
+        change: paymentMethod === 'cash' ? Math.max(change, 0) : undefined,
+        clientName: clients.find(c => c.id === selectedClient)?.name,
+      };
+      setLastTicket(ticket);
+      if (printThisSale) {
+        printTicket(ticket);
+      }
+
       setCart([]);
       setPayModalOpen(false);
       setCashReceived('');
@@ -307,7 +414,8 @@ export default function POSPage() {
   const filteredProducts = sellables.filter(s =>
     s.stock > 0 && (
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (s.barcode || '').toLowerCase().includes(searchQuery.toLowerCase())
+      (s.barcode || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.description || '').toLowerCase().includes(searchQuery.toLowerCase())
     )
   );
 
@@ -315,7 +423,8 @@ export default function POSPage() {
   const priceCheckFiltered = priceCheckQuery.trim()
     ? sellables.filter(s =>
         s.name.toLowerCase().includes(priceCheckQuery.toLowerCase()) ||
-        (s.barcode || '').toLowerCase().includes(priceCheckQuery.toLowerCase())
+        (s.barcode || '').toLowerCase().includes(priceCheckQuery.toLowerCase()) ||
+        (s.description || '').toLowerCase().includes(priceCheckQuery.toLowerCase())
       )
     : [];
 
@@ -343,7 +452,16 @@ export default function POSPage() {
                 <p className="text-sm font-bold text-amber-400">Vuelto: ${lastSale.change.toFixed(2)}</p>
               )}
             </div>
-            <button onClick={() => setLastSale(null)} className="ml-4 text-muted-foreground hover:text-foreground">
+            {lastTicket && (
+              <button
+                onClick={() => printTicket(lastTicket)}
+                title="Reimprimir ticket"
+                className="ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Printer className="h-4 w-4" />
+              </button>
+            )}
+            <button onClick={() => setLastSale(null)} className="ml-1 text-muted-foreground hover:text-foreground">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -442,15 +560,31 @@ export default function POSPage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => changeQty(item.kind, item.id, -1)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors">
-                              <Minus className="h-3.5 w-3.5" />
-                            </button>
-                            <span className="w-12 text-center font-bold text-lg tabular-nums">{item.quantity}</span>
-                            <button onClick={() => changeQty(item.kind, item.id, 1)} disabled={item.quantity >= item.stock} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-30">
-                              <Plus className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
+                          {item.soldByWeight ? (
+                            <div className="flex items-center justify-center gap-1.5">
+                              <Scale className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              <input
+                                type="number"
+                                step="0.001"
+                                min="0"
+                                max={item.stock}
+                                value={item.quantity}
+                                onChange={(e) => setItemWeight(item.kind, item.id, parseFloat(e.target.value) || 0)}
+                                className="h-8 w-24 rounded-lg border border-border bg-background px-2 text-center font-bold tabular-nums"
+                              />
+                              <span className="text-xs text-muted-foreground">kg</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => changeQty(item.kind, item.id, -1)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors">
+                                <Minus className="h-3.5 w-3.5" />
+                              </button>
+                              <span className="w-12 text-center font-bold text-lg tabular-nums">{item.quantity}</span>
+                              <button onClick={() => changeQty(item.kind, item.id, 1)} disabled={item.quantity >= item.stock} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-30">
+                                <Plus className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right font-mono">${item.price.toFixed(2)}</td>
                         <td className="px-5 py-3 text-right font-bold text-primary font-mono">${(item.price * item.quantity).toFixed(2)}</td>
@@ -492,7 +626,7 @@ export default function POSPage() {
 
           {/* Cobrar Button */}
           <button
-            onClick={() => { setPayModalOpen(true); setCashReceived(''); }}
+            onClick={() => { setPayModalOpen(true); setCashReceived(''); setPrintThisSale(printTicketOnSale); }}
             disabled={cart.length === 0}
             className="h-16 w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-xl font-black text-white shadow-xl shadow-emerald-500/25 transition-all duration-200 hover:shadow-2xl hover:brightness-110 active:scale-[0.98] disabled:opacity-30 disabled:shadow-none flex items-center justify-center gap-3"
           >
@@ -557,7 +691,7 @@ export default function POSPage() {
                 filteredProducts.slice(0, 20).map(p => (
                   <button
                     key={`${p.kind}-${p.id}`}
-                    onClick={() => { addToCart(p); setSearchOpen(false); }}
+                    onClick={() => { handleSelectSellable(p); setSearchOpen(false); }}
                     className="flex w-full items-center justify-between px-5 py-3 text-left hover:bg-muted/30 transition-colors border-b border-border/20"
                   >
                     <div>
@@ -669,6 +803,68 @@ export default function POSPage() {
         </div>
       )}
 
+      {/* Weight entry prompt — for products sold by weight (kg) */}
+      {weightPromptFor && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setWeightPromptFor(null)} />
+          <div className="relative w-full max-w-sm animate-slide-up rounded-2xl border border-border/50 bg-card p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-lg font-bold">
+                <Scale className="h-5 w-5 text-primary" />
+                Ingresar Peso
+              </h2>
+              <button onClick={() => setWeightPromptFor(null)} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="mb-1 font-semibold">{weightPromptFor.name}</p>
+            <p className="mb-4 text-sm text-muted-foreground">${weightPromptFor.price.toFixed(2)} / kg</p>
+            <div className="mb-4 flex gap-2">
+              <input
+                ref={weightInputRef}
+                type="number"
+                step={weightUnit === 'g' ? '1' : '0.001'}
+                min="0"
+                max={weightUnit === 'g' ? weightPromptFor.stock * 1000 : weightPromptFor.stock}
+                value={weightInput}
+                onChange={(e) => setWeightInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && confirmWeightEntry()}
+                className="h-14 flex-1 rounded-xl border-2 border-input bg-background/50 px-4 text-center text-2xl font-bold tabular-nums focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+              />
+              <div className="flex h-14 w-16 shrink-0 flex-col overflow-hidden rounded-xl border-2 border-input">
+                <button
+                  type="button"
+                  onClick={() => handleWeightUnitChange('kg')}
+                  className={`flex-1 text-xs font-bold transition-colors ${weightUnit === 'kg' ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-accent'}`}
+                >
+                  KG
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleWeightUnitChange('g')}
+                  className={`flex-1 border-t border-input text-xs font-bold transition-colors ${weightUnit === 'g' ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-accent'}`}
+                >
+                  G
+                </button>
+              </div>
+            </div>
+            {weightInKg > 0 && (
+              <p className="mb-4 text-center text-sm text-muted-foreground">
+                Subtotal: <span className="font-bold text-primary">${(weightPromptFor.price * weightInKg).toFixed(2)}</span>
+              </p>
+            )}
+            <button
+              onClick={confirmWeightEntry}
+              disabled={weightInKg <= 0}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl gradient-primary text-sm font-bold text-white shadow-lg transition-all hover:brightness-110 disabled:opacity-30"
+            >
+              <Plus className="h-4 w-4" />
+              Agregar a la venta
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Payment Modal */}
       {payModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center">
@@ -736,6 +932,18 @@ export default function POSPage() {
                 )}
               </div>
             )}
+
+            {/* Print ticket toggle */}
+            <label className="mb-6 flex items-center gap-3 rounded-xl border border-border/50 px-4 py-3 text-sm cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={printThisSale}
+                onChange={e => setPrintThisSale(e.target.checked)}
+                className="h-4 w-4 rounded border-input accent-primary"
+              />
+              <Printer className="h-4 w-4 text-muted-foreground" />
+              <span>Imprimir ticket de esta venta</span>
+            </label>
 
             {/* Confirm button */}
             <button

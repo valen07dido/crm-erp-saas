@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { signIn, getSession } from 'next-auth/react';
-import { Store, User, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { User, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,6 +11,12 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (router.query.reason === 'expired' || router.query.reason === 'timeout') {
+      setError('Tu sesión expiró. Volvé a iniciar sesión.');
+    }
+  }, [router.query.reason]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,12 +56,11 @@ export default function LoginPage() {
 
       <div className="relative z-10 w-full max-w-md animate-slide-up">
         {/* Logo */}
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl gradient-primary shadow-lg shadow-primary/25">
-            <Store className="h-7 w-7 text-white" />
+        <div className="mb-8 flex justify-center">
+          <div className="rounded-2xl px-6 py-5 shadow-lg shadow-primary/10">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo_completo.png" alt="Walti" className="h-auto w-auto" />
           </div>
-          <h1 className="text-3xl font-bold gradient-text">MiNegocio</h1>
-          <p className="mt-2 text-muted-foreground">Gestión integral para tu comercio</p>
         </div>
 
         {/* Card */}

@@ -23,13 +23,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       case 'POST': {
         // Create a new product
-        const { name, description, price, stock, imageUrl, barcode } = req.body as {
+        const { name, description, price, stock, imageUrl, barcode, expirationDate, soldByWeight } = req.body as {
           name: string;
           description?: string;
           price?: number;
           stock?: number;
           imageUrl?: string;
           barcode?: string;
+          expirationDate?: string | null;
+          soldByWeight?: boolean;
         };
         if (!name) {
           return res.status(400).json({ error: 'Product name is required' });
@@ -42,6 +44,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             stock: stock ?? 0,
             imageUrl: req.body.imageUrl || null,
             barcode: barcode || null,
+            expirationDate: expirationDate ? new Date(expirationDate) : null,
+            soldByWeight: soldByWeight ?? false,
             business: { connect: { id: businessId } },
           },
         });
@@ -53,17 +57,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (!id) {
           return res.status(400).json({ error: 'Product id is required in query' });
         }
-        const data = req.body as Partial<{
+        const body = req.body as Partial<{
           name: string;
           description: string;
           price: number;
           stock: number;
           imageUrl: string;
           barcode: string;
+          expirationDate: string | null;
+          soldByWeight: boolean;
         }>;
+        const { expirationDate, ...rest } = body;
         const product = await prisma.product.update({
           where: { id },
-          data,
+          data: {
+            ...rest,
+            ...(expirationDate !== undefined && { expirationDate: expirationDate ? new Date(expirationDate) : null }),
+          },
         });
         return res.status(200).json(product);
       }

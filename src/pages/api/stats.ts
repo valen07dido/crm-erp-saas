@@ -91,7 +91,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       lowStockProducts: lowStockProducts.map(p => ({
         id: p.id,
         name: p.name,
-        stock: p.stock,
+        stock: Number(p.stock),
       }))
     });
   } catch (error) {

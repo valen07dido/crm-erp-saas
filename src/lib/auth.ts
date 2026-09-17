@@ -37,7 +37,7 @@ export const authOptions: NextAuthOptions = {
   // The adapter expects database sessions, which conflicts with JWT
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 60, // 30 minutes
+    maxAge: 60 * 60, // 1 hour
   },
   secret: process.env.NEXTAUTH_SECRET,
   pages: {

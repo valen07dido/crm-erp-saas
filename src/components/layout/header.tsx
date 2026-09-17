@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, Search, User, LogOut, Settings, ChevronDown, Package, AlertTriangle, Menu } from 'lucide-react';
+import { Bell, User, LogOut, Settings, ChevronDown, Package, AlertTriangle, Menu } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 
@@ -84,16 +84,7 @@ export function Header({ onOpenMobileNav }: HeaderProps) {
         <Menu className="h-5 w-5" />
       </button>
 
-      {/* Search */}
-      <div className="relative hidden max-w-md flex-1 sm:block">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="text"
-          placeholder="Buscar productos, clientes, ventas..."
-          className="h-10 w-full rounded-lg border border-input bg-background/50 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30"
-        />
-      </div>
-      <div className="flex-1 sm:hidden" />
+      <div className="flex-1" />
 
       {/* Right side */}
       <div className="flex items-center gap-3">

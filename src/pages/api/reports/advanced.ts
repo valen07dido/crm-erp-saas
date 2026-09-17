@@ -30,8 +30,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return {
         id: p?.id,
         name: p?.name || 'Desconocido',
-        quantity: tp._sum.quantity || 0,
-        revenue: (tp._sum.quantity || 0) * Number(tp._sum.price || 0),
+        quantity: Number(tp._sum.quantity || 0),
+        revenue: Number(tp._sum.quantity || 0) * Number(tp._sum.price || 0),
       };
     }));
 
