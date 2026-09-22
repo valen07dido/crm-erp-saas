@@ -25,10 +25,10 @@ export const authOptions: NextAuthOptions = {
           },
         });
         if (!user) return null;
-        
+
         const isValid = bcrypt.compareSync(credentials.password, user.passwordHash);
         if (!isValid) return null;
-        
+
         return { id: user.id, name: user.name ?? undefined, email: user.email };
       },
     }),

@@ -77,7 +77,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
           const sf = await sfRes.json();
           if (sf?.logoUrl) setLogoUrl(sf.logoUrl);
         }
-      } catch {}
+      } catch { }
     };
     loadBranding();
   }, []);
@@ -110,10 +110,10 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
           {!collapsed && (
             <Link href="/dashboard" className="flex items-center gap-2.5 overflow-hidden">
               {logoUrl ? (
-                <img src={logoUrl} alt={businessName} className="h-9 w-9 rounded-lg object-cover shadow-md" />
+                <img src={logoUrl} alt={businessName} className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-md" />
               ) : (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src="/logo.png" alt="Walti" className="h-9 w-9 object-contain" />
+                <img src="/logo-sidebar.png" alt="Walti" className="h-9 w-auto shrink-0 object-contain" />
               )}
               <span className="truncate text-lg font-bold gradient-text">{businessName}</span>
             </Link>
@@ -124,7 +124,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
                 <img src={logoUrl} alt={businessName} className="h-9 w-9 rounded-lg object-cover shadow-md" />
               ) : (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src="/logo.png" alt="Walti" className="h-9 w-9 object-contain" />
+                <img src="/favicon.png" alt="Walti" className="h-9 w-9 object-contain" />
               )}
             </Link>
           )}

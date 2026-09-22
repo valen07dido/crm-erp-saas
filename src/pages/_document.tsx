@@ -5,7 +5,7 @@ export default function Document() {
     <Html lang="es" className="dark">
       <Head>
         <title>Walti</title>
-        <link rel="icon" href="/logo.png" type="image/png" />
+        <link rel="icon" href="/favicon.png" type="image/png" />
       </Head>
       <body>
         <Main />

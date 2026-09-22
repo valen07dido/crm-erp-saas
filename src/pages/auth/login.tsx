@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { signIn, getSession } from 'next-auth/react';
 import { User, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
@@ -57,10 +56,8 @@ export default function LoginPage() {
       <div className="relative z-10 w-full max-w-md animate-slide-up">
         {/* Logo */}
         <div className="mb-8 flex justify-center">
-          <div className="rounded-2xl px-6 py-5 shadow-lg shadow-primary/10">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo_completo.png" alt="Walti" className="h-auto w-auto" />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-login.png" alt="Walti" className="h-auto w-56" />
         </div>
 
         {/* Card */}
@@ -127,13 +124,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            ¿No tienes cuenta?{' '}
-            <Link href="/auth/signup" className="text-primary hover:underline">
-              Registrarse
-            </Link>
-          </p>
         </div>
       </div>
     </div>

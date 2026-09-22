@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
-import { Shield, Settings, Users, Store, CheckCircle, XCircle, Calendar, RefreshCw, Save } from 'lucide-react';
+import { Shield, Settings, Users, Store, CheckCircle, XCircle, Calendar, RefreshCw, Save, Plus, X, Dices, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { PLAN_LABELS } from '@/lib/plans';
 import { alertMessage, toastSuccess } from '@/lib/alerts';
@@ -46,6 +46,21 @@ export default function SuperAdminPage() {
   });
   const [usernameEdits, setUsernameEdits] = useState<Record<string, string>>({});
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const emptyCreateForm = {
+    businessName: '',
+    name: '',
+    username: '',
+    email: '',
+    password: '',
+    planName: 'BASIC',
+    planExpiresAt: '',
+    isActive: true,
+  };
+  const [createForm, setCreateForm] = useState(emptyCreateForm);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -135,6 +150,44 @@ export default function SuperAdminPage() {
     }
   };
 
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let pass = '';
+    for (let i = 0; i < 10; i++) pass += chars[Math.floor(Math.random() * chars.length)];
+    setCreateForm((f) => ({ ...f, password: pass }));
+    setShowCreatePassword(true);
+  };
+
+  const handleCreateBusiness = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreating(true);
+    try {
+      const res = await fetch('/api/superadmin/create-business', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...createForm,
+          planExpiresAt: createForm.planExpiresAt || null,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toastSuccess(`Negocio "${createForm.businessName}" creado — usuario: ${createForm.username}`);
+        setShowCreateModal(false);
+        setCreateForm(emptyCreateForm);
+        setShowCreatePassword(false);
+        fetchBusinesses();
+      } else {
+        alertMessage(data.error || 'Error al crear el negocio');
+      }
+    } catch (error) {
+      console.error(error);
+      alertMessage('Error de conexión');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   if (status === 'loading' || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -199,9 +252,18 @@ export default function SuperAdminPage() {
         <div className="rounded-xl border border-border/50 bg-card shadow-sm overflow-hidden">
           <div className="flex items-center justify-between border-b border-border/50 p-6">
             <h2 className="text-lg font-bold">Gestión de Inquilinos (Tenants)</h2>
-            <button onClick={fetchBusinesses} className="rounded-lg p-2 hover:bg-accent transition-colors" title="Actualizar">
-              <RefreshCw className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setCreateForm(emptyCreateForm); setShowCreatePassword(false); setShowCreateModal(true); }}
+                className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:brightness-110 transition-all"
+              >
+                <Plus className="h-4 w-4" />
+                Nuevo Negocio
+              </button>
+              <button onClick={fetchBusinesses} className="rounded-lg p-2 hover:bg-accent transition-colors" title="Actualizar">
+                <RefreshCw className="h-4 w-4" />
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
@@ -367,6 +429,161 @@ export default function SuperAdminPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Create Business Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !creating && setShowCreateModal(false)} />
+          <div className="relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border/50 bg-card p-6 shadow-2xl animate-in zoom-in-95">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold">Dar de alta un negocio</h2>
+              <button onClick={() => setShowCreateModal(false)} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent transition-colors">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateBusiness} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Nombre del negocio</label>
+                <input
+                  type="text"
+                  required
+                  value={createForm.businessName}
+                  onChange={(e) => setCreateForm({ ...createForm, businessName: e.target.value })}
+                  placeholder="Almacén Cris"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Nombre del administrador</label>
+                  <input
+                    type="text"
+                    value={createForm.name}
+                    onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                    placeholder="Juan Pérez"
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Usuario</label>
+                  <input
+                    type="text"
+                    required
+                    value={createForm.username}
+                    onChange={(e) => setCreateForm({ ...createForm, username: e.target.value.toLowerCase() })}
+                    placeholder="juan_perez"
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm({ ...createForm, email: e.target.value.toLowerCase() })}
+                  placeholder="juan@email.com"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Contraseña</label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={showCreatePassword ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      value={createForm.password}
+                      onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                      placeholder="Mínimo 6 caracteres"
+                      className="w-full rounded-lg border border-input bg-background px-3 py-2 pr-10 text-sm focus:ring-2 focus:ring-primary"
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowCreatePassword((s) => !s)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showCreatePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={generatePassword}
+                    title="Generar contraseña"
+                    className="flex items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium hover:bg-accent transition-colors"
+                  >
+                    <Dices className="h-3.5 w-3.5" />
+                    Generar
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Plan</label>
+                  <select
+                    value={createForm.planName}
+                    onChange={(e) => setCreateForm({ ...createForm, planName: e.target.value })}
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="BASIC">{PLAN_LABELS.BASIC} (BASIC)</option>
+                    <option value="PRO">{PLAN_LABELS.PRO} (PRO)</option>
+                    <option value="ENTERPRISE">{PLAN_LABELS.ENTERPRISE} (ENTERPRISE)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Vencimiento (Opcional)</label>
+                  <input
+                    type="date"
+                    value={createForm.planExpiresAt}
+                    onChange={(e) => setCreateForm({ ...createForm, planExpiresAt: e.target.value })}
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="createIsActive"
+                  checked={createForm.isActive}
+                  onChange={(e) => setCreateForm({ ...createForm, isActive: e.target.checked })}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <label htmlFor="createIsActive" className="text-sm font-medium">Cuenta activa desde el alta</label>
+              </div>
+
+              <div className="flex gap-3 border-t border-border/50 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="flex-1 rounded-lg border border-border py-2 text-sm font-medium hover:bg-accent transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground hover:brightness-110 transition-all disabled:opacity-50"
+                >
+                  {creating ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  ) : (
+                    'Crear negocio'
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
