@@ -99,10 +99,14 @@ model BusinessSettings {
   currency    String   @default("USD")
   taxRate     Float    @default(0)
 
-  // Fixed-hour cutoff (0-23) splitting each day's sales into two shifts for reporting.
-  shiftCutoffHour   Int    @default(14)
-  shiftMorningLabel String @default("Turno Mañana")
-  shiftNightLabel   String @default("Turno Noche")
+  // Editable hour ranges (0-23) for each shift, used by the "Ventas por Turno" report.
+  // The ranges need not be contiguous or cover the full day (e.g. 8-12 and 16-21).
+  shiftMorningStartHour Int    @default(8)
+  shiftMorningEndHour   Int    @default(12)
+  shiftNightStartHour   Int    @default(16)
+  shiftNightEndHour     Int    @default(21)
+  shiftMorningLabel     String @default("Turno Mañana")
+  shiftNightLabel       String @default("Turno Noche")
 
   // Receipt/ticket printing (thermal printer paper width in mm — 58 or 80 are common)
   ticketWidthMm     Int     @default(58)

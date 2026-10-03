@@ -14,7 +14,10 @@ export default function SettingsPage() {
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [currency, setCurrency] = useState('USD');
   const [taxRate, setTaxRate] = useState('0');
-  const [shiftCutoffHour, setShiftCutoffHour] = useState('14');
+  const [shiftMorningStartHour, setShiftMorningStartHour] = useState('8');
+  const [shiftMorningEndHour, setShiftMorningEndHour] = useState('12');
+  const [shiftNightStartHour, setShiftNightStartHour] = useState('16');
+  const [shiftNightEndHour, setShiftNightEndHour] = useState('21');
   const [shiftMorningLabel, setShiftMorningLabel] = useState('Turno Mañana');
   const [shiftNightLabel, setShiftNightLabel] = useState('Turno Noche');
   const [ticketWidthMm, setTicketWidthMm] = useState('58');
@@ -50,7 +53,10 @@ export default function SettingsPage() {
             const bsData = await bsRes.json();
             setCurrency(bsData.currency || 'USD');
             setTaxRate(String(bsData.taxRate ?? 0));
-            setShiftCutoffHour(String(bsData.shiftCutoffHour ?? 14));
+            setShiftMorningStartHour(String(bsData.shiftMorningStartHour ?? 8));
+            setShiftMorningEndHour(String(bsData.shiftMorningEndHour ?? 12));
+            setShiftNightStartHour(String(bsData.shiftNightStartHour ?? 16));
+            setShiftNightEndHour(String(bsData.shiftNightEndHour ?? 21));
             setShiftMorningLabel(bsData.shiftMorningLabel || 'Turno Mañana');
             setShiftNightLabel(bsData.shiftNightLabel || 'Turno Noche');
             setTicketWidthMm(String(bsData.ticketWidthMm ?? 58));
@@ -97,7 +103,10 @@ export default function SettingsPage() {
         body: JSON.stringify({
           currency,
           taxRate: parseFloat(taxRate) || 0,
-          shiftCutoffHour: parseInt(shiftCutoffHour, 10) || 0,
+          shiftMorningStartHour: parseInt(shiftMorningStartHour, 10) || 0,
+          shiftMorningEndHour: parseInt(shiftMorningEndHour, 10) || 0,
+          shiftNightStartHour: parseInt(shiftNightStartHour, 10) || 0,
+          shiftNightEndHour: parseInt(shiftNightEndHour, 10) || 0,
           shiftMorningLabel,
           shiftNightLabel,
           ticketWidthMm: parseInt(ticketWidthMm, 10) || 58,
@@ -326,36 +335,77 @@ export default function SettingsPage() {
                   <div className="pt-4 border-t border-border/50">
                     <h3 className="mb-1 font-medium">Turnos (para el reporte por turno)</h3>
                     <p className="mb-4 text-xs text-muted-foreground">
-                      Definí la hora que separa el turno de la mañana del turno de la noche.
+                      Definí el horario de cada turno — no hace falta que cubran todo el día (ej: mañana 8 a 12, noche 16 a 21).
                     </p>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                      <div>
-                        <label className="mb-1.5 block text-sm font-medium">Hora de corte</label>
-                        <select
-                          value={shiftCutoffHour}
-                          onChange={(e) => setShiftCutoffHour(e.target.value)}
-                          className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
-                        >
-                          {Array.from({ length: 24 }, (_, h) => (
-                            <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
-                          ))}
-                        </select>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                        <div>
+                          <label className="mb-1.5 block text-sm font-medium">Nombre turno mañana</label>
+                          <input
+                            value={shiftMorningLabel}
+                            onChange={(e) => setShiftMorningLabel(e.target.value)}
+                            className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1.5 block text-sm font-medium">Desde</label>
+                          <select
+                            value={shiftMorningStartHour}
+                            onChange={(e) => setShiftMorningStartHour(e.target.value)}
+                            className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
+                          >
+                            {Array.from({ length: 24 }, (_, h) => (
+                              <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-1.5 block text-sm font-medium">Hasta</label>
+                          <select
+                            value={shiftMorningEndHour}
+                            onChange={(e) => setShiftMorningEndHour(e.target.value)}
+                            className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
+                          >
+                            {Array.from({ length: 24 }, (_, h) => (
+                              <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
-                      <div>
-                        <label className="mb-1.5 block text-sm font-medium">Nombre turno mañana</label>
-                        <input
-                          value={shiftMorningLabel}
-                          onChange={(e) => setShiftMorningLabel(e.target.value)}
-                          className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1.5 block text-sm font-medium">Nombre turno noche</label>
-                        <input
-                          value={shiftNightLabel}
-                          onChange={(e) => setShiftNightLabel(e.target.value)}
-                          className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
-                        />
+
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                        <div>
+                          <label className="mb-1.5 block text-sm font-medium">Nombre turno noche</label>
+                          <input
+                            value={shiftNightLabel}
+                            onChange={(e) => setShiftNightLabel(e.target.value)}
+                            className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1.5 block text-sm font-medium">Desde</label>
+                          <select
+                            value={shiftNightStartHour}
+                            onChange={(e) => setShiftNightStartHour(e.target.value)}
+                            className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
+                          >
+                            {Array.from({ length: 24 }, (_, h) => (
+                              <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-1.5 block text-sm font-medium">Hasta</label>
+                          <select
+                            value={shiftNightEndHour}
+                            onChange={(e) => setShiftNightEndHour(e.target.value)}
+                            className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
+                          >
+                            {Array.from({ length: 24 }, (_, h) => (
+                              <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     </div>
                   </div>

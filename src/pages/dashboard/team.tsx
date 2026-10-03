@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { alertMessage, toastSuccess, confirmAction } from '@/lib/alerts';
-import { UserCog, Plus, X, Trash2, ShieldCheck, ScanBarcode } from 'lucide-react';
+import { alertMessage, toastSuccess, confirmAction, promptPassword } from '@/lib/alerts';
+import { UserCog, Plus, X, Trash2, ShieldCheck, ScanBarcode, KeyRound } from 'lucide-react';
 
 interface TeamMember {
   id: string;
@@ -102,6 +102,28 @@ export default function TeamPage() {
     }
   };
 
+  const handleResetPassword = async (member: TeamMember) => {
+    if (!businessId) return;
+    const newPassword = await promptPassword(`Restablecer contraseña de ${member.user.name || member.user.email}`);
+    if (!newPassword) return;
+    try {
+      const res = await fetch('/api/business-users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
+        body: JSON.stringify({ id: member.id, password: newPassword }),
+      });
+      if (res.ok) {
+        toastSuccess('Contraseña actualizada');
+      } else {
+        const data = await res.json();
+        alertMessage(data.error || 'Error al restablecer la contraseña');
+      }
+    } catch (e) {
+      console.error('Error resetting password', e);
+      alertMessage('Error de conexión');
+    }
+  };
+
   const handleDelete = async (member: TeamMember) => {
     if (!businessId) return;
     if (!(await confirmAction(`¿Eliminar a ${member.user.name || member.user.email}?`, 'Sí, eliminar'))) return;
@@ -191,14 +213,23 @@ export default function TeamPage() {
                       </select>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => handleDelete(member)}
-                        disabled={member.user.id === currentUserId}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-destructive/10 disabled:opacity-30"
-                        title={member.user.id === currentUserId ? 'No podés eliminarte a vos mismo' : 'Eliminar'}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-400" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => handleResetPassword(member)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent"
+                          title="Restablecer contraseña"
+                        >
+                          <KeyRound className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(member)}
+                          disabled={member.user.id === currentUserId}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-destructive/10 disabled:opacity-30"
+                          title={member.user.id === currentUserId ? 'No podés eliminarte a vos mismo' : 'Eliminar'}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-400" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

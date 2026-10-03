@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+print-agent/dist/
 
 # Next.js
 .next/

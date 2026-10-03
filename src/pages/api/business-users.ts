@@ -103,20 +103,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       case 'PUT': {
-        // Change an existing staff member's role
-        const { id, role } = req.body as { id?: string; role?: string };
-        if (!id || (role !== 'ADMIN' && role !== 'POS')) {
-          return res.status(400).json({ error: 'Datos inválidos' });
+        // Change an existing staff member's role and/or reset their password
+        const { id, role, password } = req.body as { id?: string; role?: string; password?: string };
+        if (!id) return res.status(400).json({ error: 'Datos inválidos' });
+        if (role !== undefined && role !== 'ADMIN' && role !== 'POS') {
+          return res.status(400).json({ error: 'Rol inválido' });
         }
+        if (password !== undefined && password.length < 4) {
+          return res.status(400).json({ error: 'La contraseña es muy corta' });
+        }
+
         const target = await prisma.businessUser.findUnique({ where: { id } });
         if (!target || target.businessId !== businessId) {
           return res.status(404).json({ error: 'Usuario no encontrado en este negocio' });
         }
+
         const updated = await prisma.businessUser.update({
           where: { id },
-          data: { role },
+          data: role !== undefined ? { role } : {},
           include: { user: { select: { id: true, email: true, username: true, name: true } } },
         });
+
+        if (password) {
+          await prisma.user.update({
+            where: { id: target.userId },
+            data: { passwordHash: bcrypt.hashSync(password, 10) },
+          });
+        }
+
         return res.status(200).json(updated);
       }
 

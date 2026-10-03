@@ -55,6 +55,7 @@ const sections: Section[] = [
       'Al cobrar, podés elegir Efectivo, Tarjeta o Transferencia; con Efectivo te calcula el vuelto automáticamente.',
       'Si un producto está marcado como "se vende por peso" (ej: quesos, fiambres), al escanearlo o buscarlo te va a pedir el peso antes de agregarlo — podés ingresarlo en Kg o en gramos con el botón KG/G al lado del campo, y el precio se calcula solo.',
       'Antes de confirmar el cobro podés destildar "Imprimir ticket de esta venta" si por esa venta puntual no querés imprimir nada — la venta se registra igual, solo que sin el ticket. El valor por defecto de ese casillero (tildado o no) se configura en Configuración.',
+      'El ícono de salida junto a "Modo Cajero" cierra la sesión — es la única forma de salir para un usuario "Solo Punto de Venta", ya que no ve el resto del menú.',
       'Al cerrar una venta con el ticket activado, se imprime automáticamente en la impresora predeterminada de la PC (se abre el diálogo de impresión de Windows) — el ancho del papel (58mm por defecto, tipo posnet) se configura en Configuración. También podés reimprimirlo con el ícono de impresora en el aviso de "Venta registrada".',
     ],
   },
@@ -164,7 +165,7 @@ const sections: Section[] = [
     summary: 'Gráficos y números que resumen cómo le fue al negocio en un período: ventas, ganancias, productos más vendidos.',
     tips: [
       'Usalo antes de tomar decisiones como subir precios o hacer una promoción — te dice qué productos realmente mueven la aguja.',
-      '"Ventas por Turno" separa las ventas de un día en dos franjas horarias (ej: mañana/noche) — muy útil si el negocio cambia de encargado o de cajero a mitad del día. La hora de corte y los nombres de cada turno se configuran en Configuración.',
+      '"Ventas por Turno" separa las ventas de un día en dos franjas horarias (ej: mañana/noche) — muy útil si el negocio cambia de encargado o de cajero a mitad del día. El horario de inicio/fin y el nombre de cada turno se configuran en Configuración, y no hace falta que cubran todo el día (ej: mañana 8 a 12, noche 16 a 21).',
     ],
   },
   {
@@ -188,6 +189,7 @@ const sections: Section[] = [
       'Rol "Administrador": acceso completo, igual que vos.',
       'Rol "Solo Punto de Venta": ese usuario, al iniciar sesión, va directo al Punto de Venta y no puede ver ni tocar el resto del sistema (Productos, Reportes, Configuración, etc.).',
       'Podés cambiar el rol de un usuario en cualquier momento desde el desplegable de la lista.',
+      'El ícono de llave restablece la contraseña de cualquier usuario del equipo (útil si alguien la olvidó) — no hace falta saber la contraseña anterior.',
       'No podés eliminarte ni cambiarte el rol a vos mismo, para evitar quedarte afuera por error.',
     ],
   },
@@ -199,7 +201,7 @@ const sections: Section[] = [
     summary: 'Datos generales del negocio (nombre, moneda, impuesto) y la personalización de la tienda pública.',
     tips: [
       'La "URL del Tenant" es el link fijo de tu negocio — no se puede editar porque es la dirección de tu tienda online.',
-      'Acá también configurás la hora de corte y los nombres de los turnos que usa el reporte "Ventas por Turno" en Reportes.',
+      'Acá también configurás el horario (desde/hasta) y los nombres de los turnos que usa el reporte "Ventas por Turno" en Reportes.',
     ],
   },
 ];

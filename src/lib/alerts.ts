@@ -36,6 +36,24 @@ export function toastSuccess(message: string) {
   return swalToast.fire({ icon: 'success', title: message });
 }
 
+export async function promptPassword(title: string): Promise<string | null> {
+  const result = await swalDark.fire({
+    title,
+    input: 'text',
+    inputPlaceholder: 'Nueva contraseña',
+    showCancelButton: true,
+    confirmButtonText: 'Restablecer',
+    cancelButtonText: 'Cancelar',
+    reverseButtons: true,
+    inputValidator: (value) => {
+      if (!value || value.length < 4) return 'La contraseña debe tener al menos 4 caracteres';
+      return undefined;
+    },
+  });
+  if (!result.isConfirmed) return null;
+  return result.value as string;
+}
+
 export async function confirmAction(message: string, confirmText = 'Sí, continuar'): Promise<boolean> {
   const result = await swalDark.fire({
     icon: 'warning',

@@ -60,15 +60,18 @@ export function buildTicketHtml(data: TicketData): string {
     padding: 2mm;
     font-family: 'Courier New', monospace;
     font-size: 11px;
+    font-weight: bold;
     color: #000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   h1 { font-size: 13px; text-align: center; margin: 0 0 2mm; }
   .meta { text-align: center; font-size: 10px; margin-bottom: 2mm; }
-  hr { border: none; border-top: 1px dashed #000; margin: 2mm 0; }
+  hr { border: none; border-top: 1px solid #000; margin: 2mm 0; }
   table { width: 100%; border-collapse: collapse; }
   td { padding: 0.5mm 0; vertical-align: top; }
   td.name { font-weight: bold; }
-  td.qty { color: #333; text-align: left; }
+  td.qty { color: #000; text-align: left; }
   td.subtotal { text-align: right; white-space: nowrap; }
   .total-row td { font-weight: bold; font-size: 13px; padding-top: 2mm; }
   .footer { text-align: center; margin-top: 3mm; font-size: 10px; }
@@ -98,12 +101,38 @@ export function buildTicketHtml(data: TicketData): string {
 </html>`;
 }
 
+const PRINT_AGENT_URL = 'http://localhost:9898';
+
+// Local print-agent (see /print-agent in the repo root): a tiny app the
+// business runs on the POS PC that sends tickets straight to the printer,
+// no browser dialog involved. If it's not running (or the business hasn't
+// installed it), this just fails fast and printTicket() falls back to the
+// browser print dialog below — nothing breaks for businesses without it.
+async function tryPrintViaAgent(data: TicketData): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(`${PRINT_AGENT_URL}/print`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return false;
+    const json = await res.json().catch(() => null);
+    return !!json?.ok;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Prints a receipt through a hidden iframe (no popup window, so it can't be
  * blocked by the browser's popup blocker) sized to the business's configured
- * thermal-printer paper width.
+ * thermal-printer paper width. Shows the browser's native print dialog.
  */
-export function printTicket(data: TicketData) {
+function printViaBrowser(data: TicketData) {
   const html = buildTicketHtml(data);
 
   const iframe = document.createElement('iframe');
@@ -134,4 +163,15 @@ export function printTicket(data: TicketData) {
 
   iframe.contentWindow?.focus();
   iframe.contentWindow?.print();
+}
+
+/**
+ * Prints a sale receipt. Tries the local print-agent first for a fully
+ * silent print (no dialog); if it's unreachable, falls back to the browser's
+ * print dialog so printing still works on machines without the agent set up.
+ */
+export async function printTicket(data: TicketData) {
+  const printedSilently = await tryPrintViaAgent(data);
+  if (printedSilently) return;
+  printViaBrowser(data);
 }

@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
-import { Shield, Settings, Users, Store, CheckCircle, XCircle, Calendar, RefreshCw, Save, Plus, X, Dices, Eye, EyeOff } from 'lucide-react';
+import { Shield, Settings, Users, Store, CheckCircle, XCircle, Calendar, RefreshCw, Save, Plus, X, Dices, Eye, EyeOff, KeyRound } from 'lucide-react';
 import Link from 'next/link';
 import { PLAN_LABELS } from '@/lib/plans';
-import { alertMessage, toastSuccess } from '@/lib/alerts';
+import { alertMessage, toastSuccess, promptPassword } from '@/lib/alerts';
 
 interface BusinessUserRow {
   user: {
@@ -98,6 +98,30 @@ export default function SuperAdminPage() {
     setUsernameEdits(
       Object.fromEntries(b.businessUsers.map((bu) => [bu.user.id, bu.user.username || '']))
     );
+  };
+
+  const handleResetPassword = async (userId: string, label: string) => {
+    const newPassword = await promptPassword(`Restablecer contraseña de ${label}`);
+    if (!newPassword) return;
+    setSavingUserId(userId);
+    try {
+      const res = await fetch('/api/superadmin/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: userId, password: newPassword }),
+      });
+      if (res.ok) {
+        toastSuccess('Contraseña actualizada');
+      } else {
+        const data = await res.json();
+        alertMessage(data.error || 'Error al restablecer la contraseña');
+      }
+    } catch (error) {
+      console.error(error);
+      alertMessage('Error de conexión');
+    } finally {
+      setSavingUserId(null);
+    }
   };
 
   const handleSaveUsername = async (userId: string) => {
@@ -422,6 +446,15 @@ export default function SuperAdminPage() {
                             <Save className="h-3.5 w-3.5" />
                           )}
                           Guardar
+                        </button>
+                        <button
+                          type="button"
+                          disabled={savingUserId === user.id}
+                          onClick={() => handleResetPassword(user.id, user.name || user.email)}
+                          title="Restablecer contraseña"
+                          className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50"
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     </div>

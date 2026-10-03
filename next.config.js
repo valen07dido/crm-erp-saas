@@ -18,7 +18,10 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://res.cloudinary.com; connect-src 'self' https://api.cloudinary.com; font-src 'self' data:; frame-ancestors 'self';",
+            // connect-src allows http://localhost:9898 — the local print-agent
+            // (see /print-agent) that lets the POS print tickets silently
+            // instead of through the browser's print dialog; see src/lib/printTicket.ts.
+            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://res.cloudinary.com; connect-src 'self' https://api.cloudinary.com http://localhost:9898; font-src 'self' data:; frame-ancestors 'self';",
           },
           {
             key: 'Access-Control-Allow-Origin',

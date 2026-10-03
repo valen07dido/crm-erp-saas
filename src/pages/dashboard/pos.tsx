@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { signOut } from 'next-auth/react';
 import {
   ScanBarcode,
   Package,
@@ -20,6 +21,7 @@ import {
   Gift,
   Scale,
   Printer,
+  LogOut,
 } from 'lucide-react';
 import { alertMessage } from '@/lib/alerts';
 import { printTicket, TicketData } from '@/lib/printTicket';
@@ -485,16 +487,25 @@ export default function POSPage() {
               </div>
               <p className="text-sm text-muted-foreground ml-11">Escanea o busca productos para agregar a la venta</p>
             </div>
-            <button
-              onClick={toggleFullscreen}
-              className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent"
-            >
-              {isFullscreen ? (
-                <><Minimize className="h-4 w-4" /> Salir de Modo Cajero</>
-              ) : (
-                <><Maximize className="h-4 w-4" /> Modo Cajero</>
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleFullscreen}
+                className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent"
+              >
+                {isFullscreen ? (
+                  <><Minimize className="h-4 w-4" /> Salir de Modo Cajero</>
+                ) : (
+                  <><Maximize className="h-4 w-4" /> Modo Cajero</>
+                )}
+              </button>
+              <button
+                onClick={() => signOut({ callbackUrl: '/auth/login' })}
+                title="Cerrar sesión"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-red-400"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           {/* Barcode Scanner Input */}

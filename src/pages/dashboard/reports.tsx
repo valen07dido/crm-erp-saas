@@ -29,11 +29,22 @@ function toLocalDateInputValue(date: Date): string {
   return new Date(date.getTime() - offset * 60000).toISOString().split('T')[0];
 }
 
+// Shift ranges are [start, end) hours and need not cover the whole day (e.g. 8-12).
+// If end <= start, the range is treated as crossing midnight (e.g. 21-2).
+function hourInShift(hour: number, start: number, end: number): boolean {
+  if (start === end) return false;
+  if (start < end) return hour >= start && hour < end;
+  return hour >= start || hour < end;
+}
+
 export default function ReportsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [advanced, setAdvanced] = useState<AdvancedReports | null>(null);
   const [loading, setLoading] = useState(true);
-  const [shiftCutoffHour, setShiftCutoffHour] = useState(14);
+  const [shiftMorningStartHour, setShiftMorningStartHour] = useState(8);
+  const [shiftMorningEndHour, setShiftMorningEndHour] = useState(12);
+  const [shiftNightStartHour, setShiftNightStartHour] = useState(16);
+  const [shiftNightEndHour, setShiftNightEndHour] = useState(21);
   const [shiftMorningLabel, setShiftMorningLabel] = useState('Turno Mañana');
   const [shiftNightLabel, setShiftNightLabel] = useState('Turno Noche');
   const [shiftDate, setShiftDate] = useState(() => toLocalDateInputValue(new Date()));
@@ -54,7 +65,10 @@ export default function ReportsPage() {
       }
       if (bsRes.ok) {
         const bs = await bsRes.json();
-        setShiftCutoffHour(bs.shiftCutoffHour ?? 14);
+        setShiftMorningStartHour(bs.shiftMorningStartHour ?? 8);
+        setShiftMorningEndHour(bs.shiftMorningEndHour ?? 12);
+        setShiftNightStartHour(bs.shiftNightStartHour ?? 16);
+        setShiftNightEndHour(bs.shiftNightEndHour ?? 21);
         setShiftMorningLabel(bs.shiftMorningLabel || 'Turno Mañana');
         setShiftNightLabel(bs.shiftNightLabel || 'Turno Noche');
       }
@@ -84,14 +98,14 @@ export default function ReportsPage() {
     const dayIncome = transactions.filter(
       (t) => t.type === 'INCOME' && toLocalDateInputValue(new Date(t.date)) === shiftDate
     );
-    const morning = dayIncome.filter((t) => new Date(t.date).getHours() < shiftCutoffHour);
-    const night = dayIncome.filter((t) => new Date(t.date).getHours() >= shiftCutoffHour);
+    const morning = dayIncome.filter((t) => hourInShift(new Date(t.date).getHours(), shiftMorningStartHour, shiftMorningEndHour));
+    const night = dayIncome.filter((t) => hourInShift(new Date(t.date).getHours(), shiftNightStartHour, shiftNightEndHour));
     const sum = (arr: Transaction[]) => arr.reduce((acc, t) => acc + Number(t.amount), 0);
     return {
       morning: { total: sum(morning), count: morning.length },
       night: { total: sum(night), count: night.length },
     };
-  }, [transactions, shiftDate, shiftCutoffHour]);
+  }, [transactions, shiftDate, shiftMorningStartHour, shiftMorningEndHour, shiftNightStartHour, shiftNightEndHour]);
 
   const totalIncome = transactions.filter(t => t.type === 'INCOME').reduce((acc, curr) => acc + Number(curr.amount), 0);
   const totalExpense = transactions.filter(t => t.type === 'EXPENSE').reduce((acc, curr) => acc + Number(curr.amount), 0);
@@ -190,7 +204,9 @@ export default function ReportsPage() {
                   <Sunrise className="h-6 w-6" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">{shiftMorningLabel}</p>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    {shiftMorningLabel} <span className="font-normal">({String(shiftMorningStartHour).padStart(2, '0')}:00–{String(shiftMorningEndHour).padStart(2, '0')}:00)</span>
+                  </p>
                   <h3 className="text-2xl font-bold">${shiftSummary.morning.total.toFixed(2)}</h3>
                   <p className="text-xs text-muted-foreground">{shiftSummary.morning.count} venta{shiftSummary.morning.count === 1 ? '' : 's'}</p>
                 </div>
@@ -200,14 +216,16 @@ export default function ReportsPage() {
                   <Moon className="h-6 w-6" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">{shiftNightLabel}</p>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    {shiftNightLabel} <span className="font-normal">({String(shiftNightStartHour).padStart(2, '0')}:00–{String(shiftNightEndHour).padStart(2, '0')}:00)</span>
+                  </p>
                   <h3 className="text-2xl font-bold">${shiftSummary.night.total.toFixed(2)}</h3>
                   <p className="text-xs text-muted-foreground">{shiftSummary.night.count} venta{shiftSummary.night.count === 1 ? '' : 's'}</p>
                 </div>
               </div>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              El corte de turno se configura en Configuración → Preferencias Financieras.
+              El horario de cada turno se configura en Configuración → Preferencias Financieras.
             </p>
           </div>
 

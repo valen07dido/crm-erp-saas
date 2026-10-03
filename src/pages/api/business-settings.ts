@@ -19,23 +19,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       case 'PUT': {
         const {
-          currency, taxRate, shiftCutoffHour, shiftMorningLabel, shiftNightLabel,
+          currency, taxRate,
+          shiftMorningStartHour, shiftMorningEndHour, shiftNightStartHour, shiftNightEndHour,
+          shiftMorningLabel, shiftNightLabel,
           ticketWidthMm, printTicketOnSale,
         } = req.body as {
           currency?: string;
           taxRate?: number;
-          shiftCutoffHour?: number;
+          shiftMorningStartHour?: number;
+          shiftMorningEndHour?: number;
+          shiftNightStartHour?: number;
+          shiftNightEndHour?: number;
           shiftMorningLabel?: string;
           shiftNightLabel?: string;
           ticketWidthMm?: number;
           printTicketOnSale?: boolean;
         };
+        const clampHour = (h: number) => Math.min(23, Math.max(0, h));
         const settings = await prisma.businessSettings.upsert({
           where: { businessId },
           update: {
             ...(currency !== undefined && { currency }),
             ...(taxRate !== undefined && { taxRate }),
-            ...(shiftCutoffHour !== undefined && { shiftCutoffHour: Math.min(23, Math.max(0, shiftCutoffHour)) }),
+            ...(shiftMorningStartHour !== undefined && { shiftMorningStartHour: clampHour(shiftMorningStartHour) }),
+            ...(shiftMorningEndHour !== undefined && { shiftMorningEndHour: clampHour(shiftMorningEndHour) }),
+            ...(shiftNightStartHour !== undefined && { shiftNightStartHour: clampHour(shiftNightStartHour) }),
+            ...(shiftNightEndHour !== undefined && { shiftNightEndHour: clampHour(shiftNightEndHour) }),
             ...(shiftMorningLabel !== undefined && { shiftMorningLabel }),
             ...(shiftNightLabel !== undefined && { shiftNightLabel }),
             ...(ticketWidthMm !== undefined && { ticketWidthMm: Math.min(300, Math.max(30, ticketWidthMm)) }),
@@ -45,7 +54,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             businessId,
             currency: currency ?? 'USD',
             taxRate: taxRate ?? 0,
-            shiftCutoffHour: shiftCutoffHour ?? 14,
+            shiftMorningStartHour: shiftMorningStartHour !== undefined ? clampHour(shiftMorningStartHour) : 8,
+            shiftMorningEndHour: shiftMorningEndHour !== undefined ? clampHour(shiftMorningEndHour) : 12,
+            shiftNightStartHour: shiftNightStartHour !== undefined ? clampHour(shiftNightStartHour) : 16,
+            shiftNightEndHour: shiftNightEndHour !== undefined ? clampHour(shiftNightEndHour) : 21,
             shiftMorningLabel: shiftMorningLabel ?? 'Turno Mañana',
             shiftNightLabel: shiftNightLabel ?? 'Turno Noche',
             ticketWidthMm: ticketWidthMm ?? 58,
