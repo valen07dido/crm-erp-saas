@@ -18,36 +18,43 @@ rompe nada si todavía no lo tenés.
 
 ## Instalación (una vez, en la PC de la caja)
 
-1. Necesitás tener [Node.js](https://nodejs.org/) instalado en esa PC
-   (versión 18 o superior). Si no lo tenés, descargalo e instalalo primero.
+**Opción recomendada — el `.exe` ya generado, no necesita Node instalado:**
+
+1. Copiá `dist/print-agent.exe` a la PC de la caja (podés ponerlo en
+   cualquier carpeta, por ejemplo `C:\Walti\print-agent.exe`).
+2. Si necesitás configurar algo (ver "Configuración" más abajo), poné el
+   archivo `.env` **al lado del .exe**, en esa misma carpeta.
+3. Hacé doble clic para probarlo. Se abre una ventanita de consola con
+   `Walti print-agent escuchando en http://localhost:9898`. Dejala abierta y
+   hacé una venta de prueba en el POS — el ticket debería salir solo, sin
+   ningún cartel.
+
+**Alternativa (si preferís correrlo con Node en vez del .exe):**
+
+1. Necesitás [Node.js](https://nodejs.org/) instalado en esa PC (versión 18+).
 2. Copiá esta carpeta (`print-agent`) a la PC de la caja.
-3. Abrí una terminal (PowerShell o CMD) dentro de la carpeta y ejecutá:
-   ```
-   npm install
-   ```
-4. Para probarlo, ejecutá:
-   ```
-   npm start
-   ```
-   Deberías ver: `Walti print-agent escuchando en http://localhost:9898`.
-   Dejá esa ventana abierta y hacé una venta de prueba en el POS — el ticket
-   debería salir solo, sin ningún cartel.
+3. Abrí una terminal ahí y ejecutá `npm install`, después `npm start`.
 
 ## Que arranque solo con Windows
 
-Para no tener que abrir la terminal cada vez:
-
-1. Generá el ejecutable (no hace falta tener Node instalado para usarlo
-   después, solo para generarlo):
-   ```
-   npm run build
-   ```
-   Esto crea `dist/print-agent.exe`.
-2. Presioná `Win + R`, escribí `shell:startup` y Enter — se abre la carpeta
+1. Presioná `Win + R`, escribí `shell:startup` y Enter — se abre la carpeta
    de Inicio de Windows.
-3. Creá un acceso directo a `dist/print-agent.exe` dentro de esa carpeta.
-4. La próxima vez que prendas la PC, el agente arranca solo (se ve un ícono
-   de consola chiquito, podés minimizarlo).
+2. Creá un acceso directo a `print-agent.exe` (o a `start-agent.bat` si
+   usaste la alternativa con Node) dentro de esa carpeta de Inicio.
+3. La próxima vez que prendas la PC, el agente arranca solo (se ve una
+   ventanita de consola negra — no la cierres, solo minimizala).
+
+### Si necesitás regenerar el .exe
+
+```
+npm run build
+```
+
+Esto requiere poder descargar un binario base de Node desde internet (no
+necesita compilar nada localmente). Si tu versión de `pkg` no encuentra un
+binario prebuilt para el target configurado en `package.json`, probá con un
+target más nuevo (por ejemplo `node22-win-x64`, `node24-win-x64`) — los
+binarios viejos (Node 18/20) a veces dejan de estar disponibles.
 
 ## Configuración (opcional)
 
@@ -61,10 +68,17 @@ creá un archivo `.env` al lado de `agent.js` con:
 ```
 PRINT_AGENT_PORT=9898
 PRINT_AGENT_PRINTER=Nombre Exacto De La Impresora
+PRINT_AGENT_LEFT_OFFSET_MM=10
 ```
 
 Para ver los nombres de impresoras que Windows reconoce en esa PC, con el
 agente corriendo abrí en el navegador: `http://localhost:9898/printers`.
+
+`PRINT_AGENT_LEFT_OFFSET_MM` compensa impresoras que imprimen corridas hacia
+la derecha (un defecto del driver/hardware, no de este agente — le pasa
+igual con el método de impresión viejo). Para calibrarlo: imprimí un ticket
+de prueba, medí en milímetros cuánto margen de más queda a la izquierda, y
+poné ese número acá.
 
 ## Notas
 

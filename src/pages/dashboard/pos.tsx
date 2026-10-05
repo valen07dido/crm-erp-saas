@@ -83,13 +83,40 @@ interface Client {
   name: string;
 }
 
+interface CartSlot {
+  cart: CartItem[];
+  selectedClient: string;
+}
+
+// Up to 4 cashiers can share one POS screen, each keeping their own
+// in-progress sale "parked" in its own slot — switching slots never touches
+// another slot's cart, so two sales never collide.
+const SLOT_COUNT = 4;
+const emptySlot = (): CartSlot => ({ cart: [], selectedClient: '' });
+
 export default function POSPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [combos, setCombos] = useState<Combo[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [slots, setSlots] = useState<CartSlot[]>(() => Array.from({ length: SLOT_COUNT }, emptySlot));
+  const [activeSlot, setActiveSlot] = useState(0);
+  const [slotsLoaded, setSlotsLoaded] = useState(false);
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // `cart`/`selectedClient` always refer to the ACTIVE slot — every existing
+  // read/write below keeps working unchanged, it just now reads/writes
+  // whichever slot is currently selected instead of one single global cart.
+  const cart = slots[activeSlot].cart;
+  const selectedClient = slots[activeSlot].selectedClient;
+  const setCart = useCallback((updater: CartItem[] | ((prev: CartItem[]) => CartItem[])) => {
+    setSlots(prev => prev.map((s, i) => (i === activeSlot
+      ? { ...s, cart: typeof updater === 'function' ? (updater as (p: CartItem[]) => CartItem[])(s.cart) : updater }
+      : s)));
+  }, [activeSlot]);
+  const setSelectedClient = useCallback((value: string) => {
+    setSlots(prev => prev.map((s, i) => (i === activeSlot ? { ...s, selectedClient: value } : s)));
+  }, [activeSlot]);
 
   // Barcode / search input
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -109,7 +136,6 @@ export default function POSPage() {
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer'>('cash');
   const [cashReceived, setCashReceived] = useState('');
-  const [selectedClient, setSelectedClient] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -139,6 +165,22 @@ export default function POSPage() {
         setBusinessId(business.id);
         setBusinessName(business.name || '');
 
+        // Restore any in-progress carts left parked in slots (e.g. a page
+        // refresh shouldn't lose a cashier's half-built sale).
+        try {
+          const saved = localStorage.getItem(`walti-pos-slots-${business.id}`);
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length === SLOT_COUNT) {
+              setSlots(parsed);
+            }
+          }
+        } catch (e) {
+          console.error('Error restoring parked carts', e);
+        } finally {
+          setSlotsLoaded(true);
+        }
+
         const [prodRes, comboRes, cliRes, settingsRes] = await Promise.all([
           fetch('/api/products', { headers: { 'x-business-id': business.id } }),
           fetch('/api/combos', { headers: { 'x-business-id': business.id } }),
@@ -162,6 +204,26 @@ export default function POSPage() {
     };
     init();
   }, []);
+
+  // Persist parked carts so a refresh doesn't wipe a cashier's in-progress sale.
+  useEffect(() => {
+    if (!businessId || !slotsLoaded) return;
+    try {
+      localStorage.setItem(`walti-pos-slots-${businessId}`, JSON.stringify(slots));
+    } catch (e) {
+      console.error('Error saving parked carts', e);
+    }
+  }, [slots, businessId, slotsLoaded]);
+
+  // Switching slots shouldn't carry over an in-progress payment entry from
+  // whichever cart was previously active.
+  const switchSlot = (index: number) => {
+    if (index === activeSlot) return;
+    setActiveSlot(index);
+    setPayModalOpen(false);
+    setCashReceived('');
+    setPaymentMethod('cash');
+  };
 
   // Keep barcode input focused
   useEffect(() => {
@@ -207,7 +269,7 @@ export default function POSPage() {
       if (quantity > sellable.stock) return prev;
       return [...prev, { ...sellable, quantity }];
     });
-  }, []);
+  }, [setCart]);
 
   // Weighable products ask for a weight (kg) before joining the cart
   const handleSelectSellable = (sellable: Sellable) => {
@@ -506,6 +568,37 @@ export default function POSPage() {
                 <LogOut className="h-4 w-4" />
               </button>
             </div>
+          </div>
+
+          {/* Cart slots — up to 4 independent in-progress sales on one screen,
+              so switching to attend someone else never touches the other cart. */}
+          <div className="mb-4 flex gap-2">
+            {slots.map((slot, i) => {
+              const count = slot.cart.reduce((s, it) => s + it.quantity, 0);
+              const isActive = i === activeSlot;
+              return (
+                <button
+                  key={i}
+                  onClick={() => switchSlot(i)}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl border-2 py-2.5 text-sm font-semibold transition-all ${
+                    isActive
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
+                      : count > 0
+                      ? 'border-amber-500/40 bg-amber-500/5 text-amber-400 hover:border-amber-500/60'
+                      : 'border-border text-muted-foreground hover:border-emerald-500/30'
+                  }`}
+                >
+                  Venta {i + 1}
+                  {count > 0 && (
+                    <span className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold text-white ${
+                      isActive ? 'bg-emerald-500' : 'bg-amber-500'
+                    }`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Barcode Scanner Input */}

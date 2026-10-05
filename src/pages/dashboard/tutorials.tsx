@@ -49,6 +49,7 @@ const sections: Section[] = [
     summary: 'Pantalla pensada para el mostrador: escaneás o buscás productos, arma el carrito y cobrás.',
     tips: [
       'El cursor queda siempre listo en el buscador de arriba — solo escaneá el código de barras y se agrega solo.',
+      'Arriba del buscador están las pestañas "Venta 1" a "Venta 4" — hasta 4 cajeros pueden tener cada uno su propia venta en curso en la misma pantalla sin pisarse: cambiar de pestaña no borra lo que tenía cargado la otra.',
       'El buscador manual y el botón "Precio" filtran tanto por nombre y código de barras como por la Descripción cargada en el producto.',
       'Usá "Modo Cajero" (pantalla completa) cuando estés atendiendo para no distraerte con el resto del panel.',
       'Botón "Precio": consulta el precio de un producto sin agregarlo a la venta en curso — ideal si un cliente pregunta un precio a mitad de un cobro.',
@@ -56,7 +57,7 @@ const sections: Section[] = [
       'Si un producto está marcado como "se vende por peso" (ej: quesos, fiambres), al escanearlo o buscarlo te va a pedir el peso antes de agregarlo — podés ingresarlo en Kg o en gramos con el botón KG/G al lado del campo, y el precio se calcula solo.',
       'Antes de confirmar el cobro podés destildar "Imprimir ticket de esta venta" si por esa venta puntual no querés imprimir nada — la venta se registra igual, solo que sin el ticket. El valor por defecto de ese casillero (tildado o no) se configura en Configuración.',
       'El ícono de salida junto a "Modo Cajero" cierra la sesión — es la única forma de salir para un usuario "Solo Punto de Venta", ya que no ve el resto del menú.',
-      'Al cerrar una venta con el ticket activado, se imprime automáticamente en la impresora predeterminada de la PC (se abre el diálogo de impresión de Windows) — el ancho del papel (58mm por defecto, tipo posnet) se configura en Configuración. También podés reimprimirlo con el ícono de impresora en el aviso de "Venta registrada".',
+      'Al cerrar una venta con el ticket activado, se imprime automáticamente en la impresora predeterminada de la PC — el ancho del papel (58mm por defecto, tipo posnet) se configura en Configuración. Si instalaste el agente de impresión local (ver print-agent/README.md) sale directo sin ningún cartel; si no, se abre el diálogo de impresión normal. También podés reimprimirlo con el ícono de impresora en el aviso de "Venta registrada".',
     ],
   },
   {
@@ -83,7 +84,7 @@ const sections: Section[] = [
     color: 'text-pink-400',
     summary: 'Armá combos de varios productos que se venden juntos a un precio fijo (ej: "Combo Familiar" = 3 gaseosas + 1 papas fritas a $5000).',
     tips: [
-      'Un combo necesita al menos 2 productos elegidos de tu catálogo, cada uno con la cantidad que lleva adentro.',
+      'Un combo necesita al menos 2 unidades en total — pueden ser 2 del mismo producto (ej: "2 Fideos" a un precio promocional) o varios productos distintos combinados.',
       'El precio que cargues es el precio final del combo — no se calcula automático a partir de los productos, así que vos decidís el descuento.',
       'En el Punto de Venta el combo aparece junto a los productos (con un ícono de regalo) para escanear o buscar igual que cualquier otro artículo.',
       'Al venderlo se registra como una sola línea en la venta (ej: "Combo Familiar x2 — $10000"), pero por atrás se descuenta el stock de cada producto que lo compone.',

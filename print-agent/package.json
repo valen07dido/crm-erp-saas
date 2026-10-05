@@ -4,15 +4,22 @@
   "description": "Agente local de impresión silenciosa para tickets POS (ESC/POS vía PDF a la impresora térmica).",
   "private": true,
   "main": "agent.js",
+  "bin": "agent.js",
   "scripts": {
     "start": "node agent.js",
-    "build": "pkg . --targets node18-win-x64 --output dist/print-agent.exe"
+    "build": "pkg . --targets node22-win-x64 --output dist/print-agent.exe"
   },
   "dependencies": {
     "pdf-to-printer": "^5.6.0",
     "pdfkit": "^0.15.0"
   },
   "devDependencies": {
-    "pkg": "^5.8.1"
+    "@yao-pkg/pkg": "^6.23.0"
+  },
+  "pkg": {
+    "assets": [
+      "node_modules/es-get-iterator/**/*.js",
+      "node_modules/pdfkit/js/data/*.afm"
+    ]
   }
 }

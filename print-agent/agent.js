@@ -44,6 +44,33 @@ loadDotEnv();
 const PORT = Number(process.env.PRINT_AGENT_PORT) || 9898;
 const PRINTER_NAME = process.env.PRINT_AGENT_PRINTER || undefined;
 
+// When bundled with pkg, `pdf-to-printer`'s bundled SumatraPDF.exe lives only
+// inside the virtual snapshot filesystem — readable, but Windows can't spawn
+// (exec) a program from there. So on first print we copy it out to a real
+// temp file once, and always pass that real path to `print()`.
+let sumatraPdfPathPromise = null;
+function getSumatraPdfPath() {
+  if (!process.pkg) return Promise.resolve(undefined); // not bundled: let pdf-to-printer use its own default
+  if (!sumatraPdfPathPromise) {
+    sumatraPdfPathPromise = (async () => {
+      const pdfToPrinterDir = path.dirname(require.resolve('pdf-to-printer/package.json'));
+      const bundledName = fs
+        .readdirSync(path.join(pdfToPrinterDir, 'dist'))
+        .find((f) => /^SumatraPDF.*\.exe$/i.test(f));
+      if (!bundledName) throw new Error('No se encontró el SumatraPDF.exe embebido');
+      const src = path.join(pdfToPrinterDir, 'dist', bundledName);
+      const destDir = path.join(os.tmpdir(), 'walti-print-agent');
+      const dest = path.join(destDir, bundledName);
+      if (!fs.existsSync(dest)) {
+        fs.mkdirSync(destDir, { recursive: true });
+        fs.writeFileSync(dest, fs.readFileSync(src));
+      }
+      return dest;
+    })();
+  }
+  return sumatraPdfPathPromise;
+}
+
 const MM_TO_PT = 2.8346456693;
 const mm = (v) => v * MM_TO_PT;
 const lh = (size) => size * 1.3;
@@ -279,12 +306,14 @@ const server = http.createServer(async (req, res) => {
       fs.writeFileSync(tmpFile, pdfBuffer);
 
       try {
+        const sumatraPdfPath = await getSumatraPdfPath();
         // Many thermal/receipt printer drivers define their roll "page" as
         // landscape internally, so SumatraPDF's default "shrink to fit" can
         // rotate + rescale our exact-size portrait PDF. Force portrait and
         // disable auto-scaling so it prints 1:1, at the size we computed.
         await print(tmpFile, {
           ...(PRINTER_NAME ? { printer: PRINTER_NAME } : {}),
+          ...(sumatraPdfPath ? { sumatraPdfPath } : {}),
           orientation: 'portrait',
           scale: 'noscale',
           monochrome: true,

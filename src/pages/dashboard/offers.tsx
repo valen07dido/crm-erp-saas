@@ -136,8 +136,9 @@ export default function OffersPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!businessId) return;
-    if (draftItems.length < 2) {
-      alertMessage('Un combo necesita al menos 2 productos', 'warning');
+    const totalUnits = draftItems.reduce((sum, it) => sum + it.quantity, 0);
+    if (totalUnits < 2) {
+      alertMessage('Un combo necesita al menos 2 unidades en total (pueden ser 2 del mismo producto)', 'warning');
       return;
     }
     setSaving(true);
@@ -417,7 +418,7 @@ export default function OffersPage() {
                 </select>
 
                 {draftItems.length === 0 ? (
-                  <p className="mt-3 text-sm text-muted-foreground">Agregá al menos 2 productos.</p>
+                  <p className="mt-3 text-sm text-muted-foreground">Agregá al menos 2 unidades (podés usar un solo producto con cantidad 2, o varios distintos).</p>
                 ) : (
                   <ul className="mt-3 space-y-2">
                     {draftItems.map((it) => (

@@ -32,8 +32,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           items: { productId: string; quantity: number }[];
         };
         if (!name) return res.status(400).json({ error: 'El nombre del combo es obligatorio' });
-        if (!Array.isArray(items) || items.length < 2) {
-          return res.status(400).json({ error: 'Un combo necesita al menos 2 productos' });
+        if (!Array.isArray(items) || items.reduce((sum, it) => sum + (it.quantity || 0), 0) < 2) {
+          return res.status(400).json({ error: 'Un combo necesita al menos 2 unidades en total' });
         }
 
         const combo = await prisma.combo.create({
@@ -70,8 +70,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           items?: { productId: string; quantity: number }[];
         };
 
-        if (items && (!Array.isArray(items) || items.length < 2)) {
-          return res.status(400).json({ error: 'Un combo necesita al menos 2 productos' });
+        if (items && (!Array.isArray(items) || items.reduce((sum, it) => sum + (it.quantity || 0), 0) < 2)) {
+          return res.status(400).json({ error: 'Un combo necesita al menos 2 unidades en total' });
         }
 
         const combo = await prisma.$transaction(async (tx) => {
