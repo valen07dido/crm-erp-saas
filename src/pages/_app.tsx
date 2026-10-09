@@ -3,7 +3,6 @@ import 'sweetalert2/dist/sweetalert2.min.css';
 import type { AppProps } from 'next/app';
 import { Inter } from 'next/font/google';
 import { SessionProvider } from 'next-auth/react';
-import { Analytics } from '@vercel/analytics/react';
 import { installDemoFetchInterceptor, isDemoMode } from '@/lib/demo-mode';
 
 const inter = Inter({
@@ -24,7 +23,6 @@ export default function MyApp({ Component, pageProps: { session, ...pageProps } 
       <main className={`${inter.variable} font-sans`}>
         <Component {...pageProps} />
       </main>
-      <Analytics />
     </SessionProvider>
   );
 }
