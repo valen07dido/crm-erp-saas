@@ -13,6 +13,7 @@ import { createDemoSeed, demoId, DemoDb, DemoProduct, DemoClient, DemoSupplier, 
 
 const FLAG_KEY = 'walti-demo-active';
 const DB_KEY = 'walti-demo-db';
+const BANNER_DISMISSED_KEY = 'walti-demo-banner-dismissed';
 const FAR_FUTURE_ISO = new Date(Date.now() + 1000 * 60 * 60 * 24 * 365).toISOString();
 
 // Next's middleware (src/middleware.ts) gates /dashboard on the server/edge,
@@ -53,6 +54,7 @@ function saveDb(db: DemoDb) {
 export function startDemo() {
   saveDb(createDemoSeed());
   localStorage.setItem(FLAG_KEY, 'true');
+  localStorage.removeItem(BANNER_DISMISSED_KEY);
   setDemoCookie(true);
   installDemoFetchInterceptor();
 }
@@ -60,7 +62,17 @@ export function startDemo() {
 export function exitDemo() {
   localStorage.removeItem(FLAG_KEY);
   localStorage.removeItem(DB_KEY);
+  localStorage.removeItem(BANNER_DISMISSED_KEY);
   setDemoCookie(false);
+}
+
+export function isDemoBannerDismissed(): boolean {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem(BANNER_DISMISSED_KEY) === 'true';
+}
+
+export function dismissDemoBanner() {
+  localStorage.setItem(BANNER_DISMISSED_KEY, 'true');
 }
 
 // ---------------------------------------------------------------------------

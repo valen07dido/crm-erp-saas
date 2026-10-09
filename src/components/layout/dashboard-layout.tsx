@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { signOut } from 'next-auth/react';
-import { AlertTriangle, Lock, LogOut, Sparkles } from 'lucide-react';
+import { AlertTriangle, Lock, LogOut, Sparkles, X } from 'lucide-react';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { InactivityTimer } from '@/components/auth/inactivity-timer';
 import { isAccountActive, isModuleAllowed } from '@/lib/plans';
 import { isModuleAllowedForRole } from '@/lib/roles';
 import { cn } from '@/lib/utils';
-import { isDemoMode } from '@/lib/demo-mode';
+import { isDemoMode, isDemoBannerDismissed, dismissDemoBanner } from '@/lib/demo-mode';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -21,6 +21,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [status, setStatus] = useState<AccessStatus>('loading');
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  // Read the dismissed flag only after mount (it lives in localStorage, so
+  // the server-rendered pass — which never shows the banner anyway, see
+  // `status === 'loading'` below — can't know it yet).
+  useEffect(() => {
+    setBannerDismissed(isDemoBannerDismissed());
+  }, []);
 
   // Close the mobile drawer whenever the route changes (e.g. browser back/forward).
   useEffect(() => {
@@ -95,7 +103,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      {demo && (
+      {demo && !bannerDismissed && (
         <div className="sticky top-0 z-[60] flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-secondary px-4 py-2 text-center text-sm font-medium text-white">
           <Sparkles className="h-4 w-4 shrink-0" />
           <span>Estás navegando una demo de Walti con datos de ejemplo — nada de esto se guarda de verdad.</span>
@@ -104,6 +112,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             className="ml-2 shrink-0 rounded-md border border-white/40 px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-white/10"
           >
             Salir de la demo
+          </button>
+          <button
+            onClick={() => { dismissDemoBanner(); setBannerDismissed(true); }}
+            title="Ocultar este aviso"
+            className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/10"
+          >
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
