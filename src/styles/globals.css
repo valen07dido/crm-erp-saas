@@ -98,6 +98,15 @@
   .animate-slide-in-right {
     animation: slideInRight 0.3s ease-out;
   }
+
+  .animate-float {
+    animation: float 4s ease-in-out infinite;
+  }
+
+  .animate-wave {
+    animation: wave 2.4s ease-in-out infinite;
+    transform-origin: 70% 70%;
+  }
 }
 
 @keyframes fadeIn {
@@ -113,6 +122,20 @@
 @keyframes slideInRight {
   from { opacity: 0; transform: translateX(20px); }
   to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(-2deg); }
+}
+
+@keyframes wave {
+  0%, 100% { transform: rotate(0deg); }
+  15% { transform: rotate(14deg); }
+  30% { transform: rotate(-8deg); }
+  45% { transform: rotate(14deg); }
+  60% { transform: rotate(-4deg); }
+  75% { transform: rotate(0deg); }
 }
 
 /* iOS Safari auto-zooms into any input/select/textarea with a font-size

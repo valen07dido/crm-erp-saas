@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { signOut } from 'next-auth/react';
-import { AlertTriangle, Lock, LogOut } from 'lucide-react';
+import { AlertTriangle, Lock, LogOut, Sparkles } from 'lucide-react';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { InactivityTimer } from '@/components/auth/inactivity-timer';
 import { isAccountActive, isModuleAllowed } from '@/lib/plans';
 import { isModuleAllowedForRole } from '@/lib/roles';
 import { cn } from '@/lib/utils';
+import { isDemoMode } from '@/lib/demo-mode';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -90,9 +91,22 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   const locked = status === 'locked-module';
+  const demo = isDemoMode();
 
   return (
     <div className="min-h-screen bg-background">
+      {demo && (
+        <div className="sticky top-0 z-[60] flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-secondary px-4 py-2 text-center text-sm font-medium text-white">
+          <Sparkles className="h-4 w-4 shrink-0" />
+          <span>Estás navegando una demo de Walti con datos de ejemplo — nada de esto se guarda de verdad.</span>
+          <button
+            onClick={() => signOut({ callbackUrl: '/auth/login' })}
+            className="ml-2 shrink-0 rounded-md border border-white/40 px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-white/10"
+          >
+            Salir de la demo
+          </button>
+        </div>
+      )}
       <InactivityTimer />
       <Sidebar
         collapsed={collapsed}
