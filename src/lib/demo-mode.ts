@@ -184,7 +184,10 @@ async function handleRequest(pathname: string, search: URLSearchParams, method: 
     const income = db.transactions.filter((t) => t.type === 'INCOME');
     const salesToday = income.filter((t) => new Date(t.date).toDateString() === todayStr).reduce((s, t) => s + Number(t.amount), 0);
     const salesMonth = income.filter((t) => new Date(t.date) >= monthStart).reduce((s, t) => s + Number(t.amount), 0);
-    const productsInStock = db.products.reduce((s, p) => s + Number(p.stock), 0);
+    // Matches the real /api/stats route: a COUNT of distinct products that
+    // still have stock, not a sum of quantities (which would mix whole units
+    // with fractional kg amounts from weighable products).
+    const productsInStock = db.products.filter((p) => Number(p.stock) > 0).length;
     const recentSales = [...db.sales]
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
       .slice(0, 5)
