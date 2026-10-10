@@ -37,12 +37,29 @@ rompe nada si todavía no lo tenés.
 
 ## Que arranque solo con Windows
 
+**Opción simple (se ve una ventanita de consola negra):**
+
 1. Presioná `Win + R`, escribí `shell:startup` y Enter — se abre la carpeta
    de Inicio de Windows.
 2. Creá un acceso directo a `print-agent.exe` (o a `start-agent.bat` si
    usaste la alternativa con Node) dentro de esa carpeta de Inicio.
 3. La próxima vez que prendas la PC, el agente arranca solo (se ve una
    ventanita de consola negra — no la cierres, solo minimizala).
+
+**Opción en segundo plano (sin ninguna ventana visible):**
+
+1. Asegurate de tener `start-agent-hidden.vbs` en la MISMA carpeta que
+   `print-agent.exe` (y el `.env`, si usás uno).
+2. `Win + R` → `shell:startup` → Enter.
+3. Creá un acceso directo a `start-agent-hidden.vbs` (botón derecho sobre el
+   archivo → "Crear acceso directo", y movés el acceso directo a la carpeta
+   de Inicio) — **no** uses el .vbs directo, mejor un acceso directo a él.
+4. Al prender la PC, el agente arranca solo y queda corriendo sin mostrar
+   ninguna ventana. Para confirmar que está activo, abrí en el navegador
+   `http://localhost:9898/ping` (tiene que devolver `{"ok":true,...}`).
+5. Para cerrarlo manualmente si hace falta (por ejemplo, para que tome un
+   `.env` nuevo), usá el Administrador de Tareas → buscá `print-agent.exe` →
+   Finalizar tarea, y volvé a abrir el acceso directo.
 
 ### Si necesitás regenerar el .exe
 

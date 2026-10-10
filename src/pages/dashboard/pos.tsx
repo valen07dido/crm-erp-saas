@@ -22,8 +22,10 @@ import {
   Scale,
   Printer,
   LogOut,
+  PackageSearch,
+  CalendarClock,
 } from 'lucide-react';
-import { alertMessage } from '@/lib/alerts';
+import { alertMessage, toastSuccess } from '@/lib/alerts';
 import { printTicket, TicketData } from '@/lib/printTicket';
 
 interface Product {
@@ -154,6 +156,11 @@ export default function POSPage() {
   const [weightInput, setWeightInput] = useState('1');
   const [weightUnit, setWeightUnit] = useState<'kg' | 'g'>('kg');
   const weightInputRef = useRef<HTMLInputElement>(null);
+
+  // Quick-create: a scanned/typed code that didn't match any product
+  const [quickCreateCode, setQuickCreateCode] = useState<string | null>(null);
+  const [quickCreateForm, setQuickCreateForm] = useState({ name: '', price: '', stock: '1', category: '', expirationDate: '' });
+  const [quickCreateSaving, setQuickCreateSaving] = useState(false);
 
   // Load data
   useEffect(() => {
@@ -319,11 +326,62 @@ export default function POSPage() {
       if (found && found.stock > 0) {
         handleSelectSellable(found);
         setBarcodeInput('');
-      } else {
-        // Flash error (shake effect)
+      } else if (found) {
+        // Exists but out of stock — that's a restock issue, not a "create it"
+        // situation, so just flash the usual error.
         barcodeRef.current?.classList.add('animate-shake');
         setTimeout(() => barcodeRef.current?.classList.remove('animate-shake'), 500);
+      } else {
+        // Nothing matches this code at all — offer to create it on the spot.
+        setQuickCreateForm({ name: '', price: '', stock: '1', category: '', expirationDate: '' });
+        setQuickCreateCode(code);
+        setBarcodeInput('');
       }
+    }
+  };
+
+  const handleQuickCreateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!businessId || !quickCreateCode) return;
+    setQuickCreateSaving(true);
+    try {
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
+        body: JSON.stringify({
+          name: quickCreateForm.name,
+          price: parseFloat(quickCreateForm.price) || 0,
+          stock: parseFloat(quickCreateForm.stock) || 0,
+          barcode: quickCreateCode,
+          category: quickCreateForm.category || null,
+          expirationDate: quickCreateForm.expirationDate || null,
+        }),
+      });
+      if (res.ok) {
+        const newProduct = await res.json();
+        setProducts(prev => [newProduct, ...prev]);
+        // Add directly from the response instead of looking it up in
+        // `products` state (which hasn't re-rendered with it yet here).
+        addToCart({
+          kind: 'product',
+          id: newProduct.id,
+          name: newProduct.name,
+          description: newProduct.description,
+          price: Number(newProduct.price),
+          barcode: newProduct.barcode,
+          stock: Number(newProduct.stock),
+          soldByWeight: newProduct.soldByWeight,
+        });
+        setQuickCreateCode(null);
+        toastSuccess(`${newProduct.name} creado y agregado a la venta`);
+      } else {
+        alertMessage('Error al crear el producto');
+      }
+    } catch (err) {
+      console.error('Error quick-creating product', err);
+      alertMessage('Error de conexión');
+    } finally {
+      setQuickCreateSaving(false);
     }
   };
 
@@ -965,6 +1023,93 @@ export default function POSPage() {
               <Plus className="h-4 w-4" />
               Agregar a la venta
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Quick-create: the scanned code didn't match any product */}
+      {quickCreateCode && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => !quickCreateSaving && setQuickCreateCode(null)} />
+          <div className="relative w-full max-w-sm animate-slide-up rounded-2xl border border-border/50 bg-card p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-lg font-bold">
+                <PackageSearch className="h-5 w-5 text-emerald-400" />
+                Producto nuevo
+              </h2>
+              <button onClick={() => !quickCreateSaving && setQuickCreateCode(null)} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Ningún producto tiene el código <span className="font-mono text-foreground">{quickCreateCode}</span>. Cargalo rápido y lo agregamos directo a la venta.
+            </p>
+            <form onSubmit={handleQuickCreateProduct} className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">Nombre *</label>
+                <input
+                  autoFocus
+                  required
+                  value={quickCreateForm.name}
+                  onChange={(e) => setQuickCreateForm({ ...quickCreateForm, name: e.target.value })}
+                  placeholder="Nombre del producto"
+                  className="h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">Precio</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={quickCreateForm.price}
+                    onChange={(e) => setQuickCreateForm({ ...quickCreateForm, price: e.target.value })}
+                    placeholder="0.00"
+                    className="h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">Stock inicial</label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={quickCreateForm.stock}
+                    onChange={(e) => setQuickCreateForm({ ...quickCreateForm, stock: e.target.value })}
+                    placeholder="1"
+                    className="h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">Categoría (Opcional)</label>
+                <input
+                  value={quickCreateForm.category}
+                  onChange={(e) => setQuickCreateForm({ ...quickCreateForm, category: e.target.value })}
+                  placeholder="Bebidas, Almacén, Limpieza..."
+                  className="h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium">
+                  <CalendarClock className="h-3.5 w-3.5" />
+                  Vencimiento (Opcional)
+                </label>
+                <input
+                  type="date"
+                  value={quickCreateForm.expirationDate}
+                  onChange={(e) => setQuickCreateForm({ ...quickCreateForm, expirationDate: e.target.value })}
+                  className="h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setQuickCreateCode(null)} className="flex h-10 flex-1 items-center justify-center rounded-lg border border-border text-sm font-medium hover:bg-accent">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={quickCreateSaving} className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg gradient-primary text-sm font-bold text-white shadow-lg transition-all hover:brightness-110 disabled:opacity-50">
+                  {quickCreateSaving ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : 'Crear y agregar'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

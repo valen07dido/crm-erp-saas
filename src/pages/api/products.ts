@@ -23,13 +23,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       case 'POST': {
         // Create a new product
-        const { name, description, price, stock, imageUrl, barcode, expirationDate, soldByWeight } = req.body as {
+        const { name, description, price, stock, imageUrl, barcode, category, expirationDate, soldByWeight } = req.body as {
           name: string;
           description?: string;
           price?: number;
           stock?: number;
           imageUrl?: string;
           barcode?: string;
+          category?: string;
           expirationDate?: string | null;
           soldByWeight?: boolean;
         };
@@ -44,6 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             stock: stock ?? 0,
             imageUrl: req.body.imageUrl || null,
             barcode: barcode || null,
+            category: category || null,
             expirationDate: expirationDate ? new Date(expirationDate) : null,
             soldByWeight: soldByWeight ?? false,
             business: { connect: { id: businessId } },

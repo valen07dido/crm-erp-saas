@@ -49,6 +49,7 @@ const sections: Section[] = [
     summary: 'Pantalla pensada para el mostrador: escaneás o buscás productos, arma el carrito y cobrás.',
     tips: [
       'El cursor queda siempre listo en el buscador de arriba — solo escaneá el código de barras y se agrega solo.',
+      'Si escaneás un código que no corresponde a ningún producto cargado, te va a ofrecer crearlo al toque (nombre, precio y stock inicial) y lo agrega directo a la venta en curso — no hace falta ser administrador, cualquier usuario puede hacerlo desde acá.',
       'Arriba del buscador están las pestañas "Venta 1" a "Venta 4" — hasta 4 cajeros pueden tener cada uno su propia venta en curso en la misma pantalla sin pisarse: cambiar de pestaña no borra lo que tenía cargado la otra.',
       'El buscador manual y el botón "Precio" filtran tanto por nombre y código de barras como por la Descripción cargada en el producto.',
       'Usá "Modo Cajero" (pantalla completa) cuando estés atendiendo para no distraerte con el resto del panel.',
@@ -67,6 +68,7 @@ const sections: Section[] = [
     color: 'text-primary',
     summary: 'Acá administrás todo tu catálogo: nombre, precio, stock, código de barras e imagen de cada producto.',
     tips: [
+      'El botón "Escanear" te deja escanear un código de barras: si ya existe un producto con ese código se abre directo para editarlo, y si es nuevo se abre el alta con el código ya cargado — ideal para no tipear nada a mano.',
       'El buscador de arriba filtra por nombre, descripción o código de barras al mismo tiempo.',
       'Los desplegables "Todo el stock" y "Todos los vencimientos" te dejan filtrar rápido por productos con stock bajo/sin stock o por vencer/vencidos — "Limpiar filtros" los resetea junto con la búsqueda.',
       'La lista se pagina de a 20 productos para que no quede una tabla eterna — usá "Anterior"/"Siguiente" para moverte entre páginas.',
@@ -131,7 +133,7 @@ const sections: Section[] = [
     color: 'text-orange-400',
     summary: 'Acá registrás la mercadería que ingresa: aumenta el stock de tus productos y queda como gasto en Caja.',
     tips: [
-      '"Registrar Compra" es para cargar a mano, producto por producto, con su costo.',
+      '"Registrar Compra" es para cargar a mano, producto por producto, con su costo — tiene un campo para escanear el código de barras de la mercadería que llega: si el producto ya existe se agrega solo al pedido, y si es nuevo te pide nombre y precio para crearlo y agregarlo en el mismo paso.',
       '"Importar Factura PDF" es el atajo grande: subís el PDF (lista de precios o factura) de tu proveedor, el sistema intenta leer los productos y precios automáticamente, vos definís el % de ganancia que le querés agregar, y confirmás — los productos se crean o actualizan ya con el precio de venta calculado.',
       'Como la lectura del PDF es automática, siempre revisá la tabla antes de confirmar: puede haber alguna línea mal interpretada, sobre todo en facturas con formatos poco comunes.',
       'Si el proveedor manda la misma lista actualizada más adelante, importarla de nuevo actualiza los precios de los productos existentes en vez de duplicarlos (los reconoce por el código del proveedor).',

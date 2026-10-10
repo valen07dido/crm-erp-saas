@@ -180,6 +180,7 @@ model Product {
   stock       Decimal  @default(0)
   imageUrl    String?
   barcode     String?  // EAN13, Code128, etc.
+  category    String?
   expirationDate DateTime?
   soldByWeight   Boolean @default(false) // if true, price is per-kg and quantities are in kg
   businessId  String

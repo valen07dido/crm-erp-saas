@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Truck, Plus, X, Search, PackageOpen, Download, FileUp, Trash2, Percent, Eye, Gift } from 'lucide-react';
+import { Truck, Plus, X, Search, PackageOpen, Download, FileUp, Trash2, Percent, Eye, Gift, PackageSearch } from 'lucide-react';
 import { exportToCSV } from '@/lib/export';
 import { alertMessage, toastSuccess } from '@/lib/alerts';
+import { BarcodeScanField } from '@/components/ui/barcode-scan-field';
 
 interface Purchase {
   id: string;
@@ -17,6 +18,7 @@ interface Product {
   id: string;
   name: string;
   price: number;
+  barcode: string | null;
 }
 
 interface Supplier {
@@ -48,6 +50,11 @@ export default function PurchasesPage() {
   // Form state
   const [selectedSupplier, setSelectedSupplier] = useState('');
   const [cart, setCart] = useState<{ productId: string; quantity: number; price: number; product?: Product }[]>([]);
+
+  // Quick-create (scan a barcode that doesn't match any product yet)
+  const [quickCreateBarcode, setQuickCreateBarcode] = useState<string | null>(null);
+  const [quickCreateForm, setQuickCreateForm] = useState({ name: '', price: '' });
+  const [quickCreateSaving, setQuickCreateSaving] = useState(false);
 
   // PDF invoice import state
   const [showImportModal, setShowImportModal] = useState(false);
@@ -93,19 +100,72 @@ export default function PurchasesPage() {
     init();
   }, []);
 
+  // Shared by the dropdown (which looks the product up by id) and the
+  // barcode-scan flow (which already has the fresh product object in hand,
+  // e.g. one it just created — looking it up by id would miss it since
+  // `products` state hasn't re-rendered with it yet).
+  const addProductToCart = (product: Product) => {
+    setCart(prev => {
+      const existing = prev.find(item => item.productId === product.id);
+      if (existing) {
+        return prev.map(item => item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+      }
+      // For purchases, default cost price could be product price, but editable later
+      return [...prev, { productId: product.id, quantity: 1, price: product.price, product }];
+    });
+  };
+
   const handleAddToCart = (productId: string) => {
     if (!productId) return;
     const product = products.find(p => p.id === productId);
     if (!product) return;
-    
-    setCart(prev => {
-      const existing = prev.find(item => item.productId === productId);
-      if (existing) {
-        return prev.map(item => item.productId === productId ? { ...item, quantity: item.quantity + 1 } : item);
+    addProductToCart(product);
+  };
+
+  // Scan a barcode while building a purchase: if it matches an existing
+  // product, add it straight to the order; if not, open a quick-create form
+  // (just name + price) so the product gets created and added in one step.
+  const handleScanInPurchase = (code: string) => {
+    const existing = products.find(p => p.barcode === code);
+    if (existing) {
+      addProductToCart(existing);
+      toastSuccess(`${existing.name} agregado al pedido`);
+    } else {
+      setQuickCreateForm({ name: '', price: '' });
+      setQuickCreateBarcode(code);
+    }
+  };
+
+  const handleQuickCreateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!businessId || !quickCreateBarcode) return;
+    setQuickCreateSaving(true);
+    try {
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
+        body: JSON.stringify({
+          name: quickCreateForm.name,
+          price: parseFloat(quickCreateForm.price) || 0,
+          stock: 0,
+          barcode: quickCreateBarcode,
+        }),
+      });
+      if (res.ok) {
+        const newProduct: Product = await res.json();
+        setProducts(prev => [newProduct, ...prev]);
+        addProductToCart(newProduct);
+        setQuickCreateBarcode(null);
+        toastSuccess(`${newProduct.name} creado y agregado al pedido`);
+      } else {
+        alertMessage('Error al crear el producto');
       }
-      // For purchases, default cost price could be product price, but editable later
-      return [...prev, { productId, quantity: 1, price: product.price, product }];
-    });
+    } catch (err) {
+      console.error('Error quick-creating product', err);
+      alertMessage('Error de conexión');
+    } finally {
+      setQuickCreateSaving(false);
+    }
   };
 
   const updateCartItem = (productId: string, field: 'quantity' | 'price', value: string) => {
@@ -422,8 +482,16 @@ export default function PurchasesPage() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium">Agregar Producto al Pedido</label>
-                <select 
+                <label className="mb-1.5 block text-sm font-medium">Escanear producto</label>
+                <BarcodeScanField onScan={handleScanInPurchase} placeholder="Escaneá el código de barras del producto que llegó..." />
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Si el código no existe todavía, te va a pedir que crees el producto al toque.
+                </p>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">O agregar manualmente</label>
+                <select
                   onChange={(e) => handleAddToCart(e.target.value)}
                   value=""
                   className="h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
@@ -470,6 +538,60 @@ export default function PurchasesPage() {
                 <button type="button" onClick={() => setShowModal(false)} className="flex h-10 flex-1 items-center justify-center rounded-lg border border-border hover:bg-accent">Cancelar</button>
                 <button type="submit" disabled={saving || cart.length === 0} className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg gradient-primary text-white hover:brightness-110 disabled:opacity-50">
                   {saving ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : 'Registrar Compra'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick-create: the scanned barcode didn't match any product */}
+      {quickCreateBarcode && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !quickCreateSaving && setQuickCreateBarcode(null)} />
+          <div className="relative w-full max-w-sm animate-slide-up rounded-2xl border border-border/50 bg-card p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-lg font-semibold">
+                <PackageSearch className="h-5 w-5 text-emerald-400" />
+                Producto nuevo
+              </h2>
+              <button onClick={() => !quickCreateSaving && setQuickCreateBarcode(null)} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Ningún producto tiene el código <span className="font-mono text-foreground">{quickCreateBarcode}</span>. Cargalo rápido y lo agregamos directo al pedido.
+            </p>
+            <form onSubmit={handleQuickCreateProduct} className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">Nombre *</label>
+                <input
+                  autoFocus
+                  required
+                  value={quickCreateForm.name}
+                  onChange={(e) => setQuickCreateForm({ ...quickCreateForm, name: e.target.value })}
+                  placeholder="Nombre del producto"
+                  className="h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">Precio de venta</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={quickCreateForm.price}
+                  onChange={(e) => setQuickCreateForm({ ...quickCreateForm, price: e.target.value })}
+                  placeholder="0.00"
+                  className="h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">Lo podés ajustar después en Productos — el costo de esta compra se carga aparte.</p>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setQuickCreateBarcode(null)} className="flex h-10 flex-1 items-center justify-center rounded-lg border border-border hover:bg-accent">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={quickCreateSaving} className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg gradient-primary text-sm font-medium text-white shadow-lg transition-all hover:brightness-110 disabled:opacity-50">
+                  {quickCreateSaving ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : 'Crear y agregar'}
                 </button>
               </div>
             </form>

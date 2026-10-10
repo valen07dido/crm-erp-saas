@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { ImageUploadField } from '@/components/ui/image-upload-field';
+import { BarcodeScanField } from '@/components/ui/barcode-scan-field';
 import { alertMessage, toastSuccess, confirmAction } from '@/lib/alerts';
 import {
   Package,
@@ -14,6 +15,8 @@ import {
   DownloadCloud,
   CalendarClock,
   Scale,
+  ScanBarcode,
+  PackageSearch,
 } from 'lucide-react';
 
 interface Product {
@@ -24,6 +27,7 @@ interface Product {
   stock: number;
   imageUrl: string | null;
   barcode: string | null;
+  category: string | null;
   createdAt: string;
   expirationDate: string | null;
   soldByWeight: boolean;
@@ -42,11 +46,12 @@ export default function ProductsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [form, setForm] = useState({
-    name: '', description: '', price: '', stock: '', imageUrl: '', barcode: '',
+    name: '', description: '', price: '', stock: '', imageUrl: '', barcode: '', category: '',
     expirationDate: '', soldByWeight: false,
   });
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showScanModal, setShowScanModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -88,13 +93,27 @@ export default function ProductsPage() {
     init();
   }, []);
 
-  const openCreateModal = () => {
+  const openCreateModal = (prefillBarcode?: string) => {
     setEditingProduct(null);
     setForm({
-      name: '', description: '', price: '', stock: '', imageUrl: '', barcode: '',
+      name: '', description: '', price: '', stock: '', imageUrl: '', barcode: prefillBarcode || '', category: '',
       expirationDate: '', soldByWeight: false,
     });
     setShowModal(true);
+  };
+
+  // Scan a barcode: jump straight into editing the matching product, or into
+  // creating a new one with the code already filled in if nothing matches —
+  // the whole point is to never have to type the barcode by hand.
+  const handleScan = (code: string) => {
+    setShowScanModal(false);
+    const existing = products.find((p) => p.barcode === code);
+    if (existing) {
+      openEditModal(existing);
+      toastSuccess(`Encontrado: ${existing.name}`);
+    } else {
+      openCreateModal(code);
+    }
   };
 
   const openEditModal = (product: Product) => {
@@ -106,6 +125,7 @@ export default function ProductsPage() {
       stock: String(product.stock),
       imageUrl: product.imageUrl || '',
       barcode: product.barcode || '',
+      category: product.category || '',
       expirationDate: product.expirationDate ? product.expirationDate.split('T')[0] : '',
       soldByWeight: product.soldByWeight,
     });
@@ -124,6 +144,7 @@ export default function ProductsPage() {
         stock: parseFloat(form.stock) || 0,
         imageUrl: form.imageUrl || null,
         barcode: form.barcode || null,
+        category: form.category || null,
         expirationDate: form.expirationDate || null,
         soldByWeight: form.soldByWeight,
       };
@@ -267,6 +288,13 @@ export default function ProductsPage() {
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setShowScanModal(true)}
+            className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-card px-4 py-2.5 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/10"
+          >
+            <ScanBarcode className="h-4 w-4" />
+            Escanear
+          </button>
+          <button
             onClick={() => setShowImportModal(true)}
             className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent"
           >
@@ -274,7 +302,7 @@ export default function ProductsPage() {
             Importar CSV
           </button>
           <button
-            onClick={openCreateModal}
+            onClick={() => openCreateModal()}
             className="flex items-center gap-2 rounded-lg gradient-primary px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 transition-all duration-200 hover:shadow-xl hover:brightness-110 active:scale-[0.98]"
           >
             <Plus className="h-4 w-4" />
@@ -460,6 +488,29 @@ export default function ProductsPage() {
         )}
       </div>
 
+      {/* Scan barcode: jump to edit if it matches an existing product, or to
+          create one with the code already filled in if it doesn't. */}
+      {showScanModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-24">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowScanModal(false)} />
+          <div className="relative w-full max-w-md animate-slide-up rounded-2xl border border-border/50 bg-card p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-lg font-semibold">
+                <PackageSearch className="h-5 w-5 text-emerald-400" />
+                Escanear producto
+              </h2>
+              <button onClick={() => setShowScanModal(false)} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <BarcodeScanField onScan={handleScan} autoFocus />
+            <p className="mt-3 text-xs text-muted-foreground">
+              Si el código ya existe, se abre para editarlo. Si es nuevo, se abre el alta con el código cargado.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -485,6 +536,11 @@ export default function ProductsPage() {
                     <label className="mb-1.5 block text-sm font-medium">Descripción</label>
                     <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="Bebida gaseosa" />
                   </div>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">Categoría (Opcional)</label>
+                  <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="Bebidas, Almacén, Limpieza..." />
                 </div>
 
                 <ImageUploadField
