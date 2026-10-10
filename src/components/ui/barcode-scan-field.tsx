@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ScanBarcode } from 'lucide-react';
+import { CameraScanButton } from '@/components/ui/camera-scan-button';
 
 interface BarcodeScanFieldProps {
   onScan: (code: string) => void;
@@ -38,7 +39,12 @@ export function BarcodeScanField({ onScan, placeholder, autoFocus, className }: 
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder || 'Escaneá o escribí el código de barras y presioná Enter...'}
-        className="h-12 w-full rounded-xl border-2 border-emerald-500/30 bg-background/50 pl-11 pr-4 text-sm font-medium transition-all duration-200 placeholder:text-muted-foreground focus:border-emerald-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/10"
+        className="h-12 w-full rounded-xl border-2 border-emerald-500/30 bg-background/50 pl-11 pr-12 text-sm font-medium transition-all duration-200 placeholder:text-muted-foreground focus:border-emerald-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/10"
+      />
+      <CameraScanButton
+        onScan={onScan}
+        title="Escanear con la cámara del celular/PC"
+        className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-emerald-400 transition-colors hover:bg-emerald-500/10"
       />
     </div>
   );

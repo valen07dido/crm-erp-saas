@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { alertMessage, toastSuccess } from '@/lib/alerts';
 import { printTicket, TicketData } from '@/lib/printTicket';
+import { CameraScanButton } from '@/components/ui/camera-scan-button';
 
 interface Product {
   id: string;
@@ -314,29 +315,37 @@ export default function POSPage() {
     setWeightPromptFor(null);
   };
 
+  // Resolve a scanned/typed code against the sellables list — shared by the
+  // Enter-key flow (USB/Bluetooth scanner or manual typing) and the camera
+  // scan flow, so both land on identical found/out-of-stock/not-found behavior.
+  const processScannedCode = (rawCode: string) => {
+    const code = rawCode.trim();
+    if (!code) return;
+    // Find by barcode first, then by name partial match
+    const found = sellables.find(s =>
+      s.barcode?.toLowerCase() === code.toLowerCase() ||
+      s.name.toLowerCase() === code.toLowerCase()
+    );
+    if (found && found.stock > 0) {
+      handleSelectSellable(found);
+      setBarcodeInput('');
+    } else if (found) {
+      // Exists but out of stock — that's a restock issue, not a "create it"
+      // situation, so just flash the usual error.
+      barcodeRef.current?.classList.add('animate-shake');
+      setTimeout(() => barcodeRef.current?.classList.remove('animate-shake'), 500);
+    } else {
+      // Nothing matches this code at all — offer to create it on the spot.
+      setQuickCreateForm({ name: '', price: '', stock: '1', category: '', expirationDate: '' });
+      setQuickCreateCode(code);
+      setBarcodeInput('');
+    }
+  };
+
   // Handle barcode scan (Enter key)
   const handleBarcodeScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && barcodeInput.trim()) {
-      const code = barcodeInput.trim();
-      // Find by barcode first, then by name partial match
-      const found = sellables.find(s =>
-        s.barcode?.toLowerCase() === code.toLowerCase() ||
-        s.name.toLowerCase() === code.toLowerCase()
-      );
-      if (found && found.stock > 0) {
-        handleSelectSellable(found);
-        setBarcodeInput('');
-      } else if (found) {
-        // Exists but out of stock — that's a restock issue, not a "create it"
-        // situation, so just flash the usual error.
-        barcodeRef.current?.classList.add('animate-shake');
-        setTimeout(() => barcodeRef.current?.classList.remove('animate-shake'), 500);
-      } else {
-        // Nothing matches this code at all — offer to create it on the spot.
-        setQuickCreateForm({ name: '', price: '', stock: '1', category: '', expirationDate: '' });
-        setQuickCreateCode(code);
-        setBarcodeInput('');
-      }
+      processScannedCode(barcodeInput);
     }
   };
 
@@ -669,8 +678,13 @@ export default function POSPage() {
               onChange={e => setBarcodeInput(e.target.value)}
               onKeyDown={handleBarcodeScan}
               placeholder="Escanear código de barras o escribir nombre del producto..."
-              className="h-14 w-full rounded-2xl border-2 border-emerald-500/30 bg-card pl-14 pr-14 text-lg font-medium transition-all duration-200 placeholder:text-muted-foreground focus:border-emerald-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/10"
+              className="h-14 w-full rounded-2xl border-2 border-emerald-500/30 bg-card pl-14 pr-24 text-lg font-medium transition-all duration-200 placeholder:text-muted-foreground focus:border-emerald-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/10"
               autoFocus
+            />
+            <CameraScanButton
+              onScan={processScannedCode}
+              title="Escanear con la cámara del celular/PC"
+              className="absolute right-14 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-xl transition-colors hover:bg-accent"
             />
             <button
               onClick={() => { setSearchOpen(true); setSearchQuery(''); }}
