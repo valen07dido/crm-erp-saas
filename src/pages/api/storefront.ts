@@ -32,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'PUT') {
     try {
-      const { heroTitle, heroSubtitle, heroImageUrl, primaryColor, themeMode } = req.body;
+      const { heroTitle, heroSubtitle, heroImageUrl, primaryColor, backgroundColor, themeMode, logoUrl, aboutText, aboutImageUrl } = req.body;
 
       const updatedStorefront = await prisma.storefront.upsert({
         where: { businessId },
@@ -41,7 +41,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           heroSubtitle,
           heroImageUrl,
           primaryColor,
+          backgroundColor,
           themeMode,
+          logoUrl,
+          aboutText,
+          aboutImageUrl,
         },
         create: {
           businessId,
@@ -49,7 +53,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           heroSubtitle,
           heroImageUrl,
           primaryColor,
+          backgroundColor,
           themeMode,
+          logoUrl,
+          aboutText,
+          aboutImageUrl,
         },
       });
 

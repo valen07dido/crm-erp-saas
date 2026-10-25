@@ -20,6 +20,7 @@ interface StorefrontProps {
   heroSubtitle: string;
   heroImageUrl: string | null;
   primaryColor: string;
+  backgroundColor: string | null;
   themeMode: string;
   logoUrl: string | null;
   aboutText: string | null;
@@ -58,6 +59,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       heroSubtitle: sf?.heroSubtitle || 'Los mejores productos al mejor precio',
       heroImageUrl: sf?.heroImageUrl || null,
       primaryColor: sf?.primaryColor || '#3b82f6',
+      backgroundColor: sf?.backgroundColor || null,
       themeMode: sf?.themeMode || 'dark',
       logoUrl: sf?.logoUrl || null,
       aboutText: sf?.aboutText || null,
@@ -68,7 +70,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         description: p.description,
         price: p.price.toString(),
         imageUrl: p.imageUrl || null,
-        stock: p.stock,
+        stock: Number(p.stock),
       })),
     },
   };
@@ -81,6 +83,7 @@ export default function StorefrontPage({
   heroSubtitle,
   heroImageUrl,
   primaryColor,
+  backgroundColor,
   themeMode,
   logoUrl,
   aboutText,
@@ -88,7 +91,7 @@ export default function StorefrontPage({
   products,
 }: StorefrontProps) {
   const isDark = themeMode === 'dark';
-  const bgColor = isDark ? '#09090b' : '#f8fafc';
+  const bgColor = backgroundColor || (isDark ? '#09090b' : '#f8fafc');
   const textColor = isDark ? '#fafafa' : '#0f172a';
   const cardBg = isDark ? 'rgba(255,255,255,0.03)' : '#ffffff';
   const borderColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';

@@ -81,6 +81,7 @@ model Storefront {
   heroSubtitle  String?  @default("Los mejores productos al mejor precio")
   heroImageUrl  String?
   primaryColor  String?  @default("#3b82f6") // tailwind blue-500
+  backgroundColor String? @default("#09090b")
   themeMode     String   @default("dark")
   
   logoUrl       String?

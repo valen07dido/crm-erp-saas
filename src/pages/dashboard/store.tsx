@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { ImageUploadField } from '@/components/ui/image-upload-field';
-import { Save, Store, Layout, Type, Palette, Image as ImageIcon, ExternalLink } from 'lucide-react';
+import { Save, Store, Layout, Type, Palette, Image as ImageIcon, ExternalLink, Info } from 'lucide-react';
 import { alertMessage, toastSuccess } from '@/lib/alerts';
 
 interface StorefrontConfig {
@@ -9,7 +9,11 @@ interface StorefrontConfig {
   heroSubtitle: string;
   heroImageUrl: string;
   primaryColor: string;
+  backgroundColor: string;
   themeMode: string;
+  logoUrl: string;
+  aboutText: string;
+  aboutImageUrl: string;
 }
 
 export default function StoreBuilderPage() {
@@ -18,7 +22,11 @@ export default function StoreBuilderPage() {
     heroSubtitle: 'Los mejores productos al mejor precio',
     heroImageUrl: '',
     primaryColor: '#3b82f6',
+    backgroundColor: '#09090b',
     themeMode: 'dark',
+    logoUrl: '',
+    aboutText: '',
+    aboutImageUrl: '',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -44,7 +52,11 @@ export default function StoreBuilderPage() {
             heroSubtitle: data.heroSubtitle || '',
             heroImageUrl: data.heroImageUrl || '',
             primaryColor: data.primaryColor || '#3b82f6',
+            backgroundColor: data.backgroundColor || (data.themeMode === 'light' ? '#f8fafc' : '#09090b'),
             themeMode: data.themeMode || 'dark',
+            logoUrl: data.logoUrl || '',
+            aboutText: data.aboutText || '',
+            aboutImageUrl: data.aboutImageUrl || '',
           });
         }
       } catch (e) {
@@ -164,6 +176,23 @@ export default function StoreBuilderPage() {
                 </div>
               </div>
               <div>
+                <label className="mb-1.5 block text-sm font-medium">Color de Fondo</label>
+                <div className="flex gap-2">
+                  <input
+                    type="color"
+                    value={config.backgroundColor}
+                    onChange={(e) => handleChange('backgroundColor', e.target.value)}
+                    className="h-10 w-12 cursor-pointer rounded border-0 bg-transparent p-0"
+                  />
+                  <input
+                    type="text"
+                    value={config.backgroundColor}
+                    onChange={(e) => handleChange('backgroundColor', e.target.value)}
+                    className="w-full rounded-lg border border-input bg-background/50 px-3 py-2 text-sm uppercase focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+              </div>
+              <div>
                 <label className="mb-1.5 block text-sm font-medium">Tema Base</label>
                 <select
                   value={config.themeMode}
@@ -173,6 +202,9 @@ export default function StoreBuilderPage() {
                   <option value="light">Claro</option>
                   <option value="dark">Oscuro (Recomendado)</option>
                 </select>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Define si el texto y los bordes son claros u oscuros — ajustá el Color de Fondo de arriba para que combine.
+                </p>
               </div>
             </div>
           </div>
@@ -187,6 +219,44 @@ export default function StoreBuilderPage() {
               onChange={(url) => handleChange('heroImageUrl', url)}
               businessId={businessData?.id || null}
             />
+          </div>
+
+          <div className="rounded-xl border border-border/50 bg-card p-6 shadow-lg">
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
+              <Store className="h-5 w-5 text-primary" /> Logo
+            </h2>
+            <ImageUploadField
+              label="Logo (aparece en la barra de navegación)"
+              value={config.logoUrl}
+              onChange={(url) => handleChange('logoUrl', url)}
+              businessId={businessData?.id || null}
+            />
+          </div>
+
+          <div className="rounded-xl border border-border/50 bg-card p-6 shadow-lg">
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
+              <Info className="h-5 w-5 text-primary" /> Sobre Nosotros
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">
+                  Texto <span className="text-xs font-normal text-muted-foreground">(dejalo vacío para ocultar esta sección)</span>
+                </label>
+                <textarea
+                  value={config.aboutText}
+                  onChange={(e) => handleChange('aboutText', e.target.value)}
+                  placeholder="Contá quiénes son, hace cuánto están, qué los distingue..."
+                  rows={5}
+                  className="w-full rounded-lg border border-input bg-background/50 px-3 py-2 text-sm focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              <ImageUploadField
+                label="Imagen (Opcional)"
+                value={config.aboutImageUrl}
+                onChange={(url) => handleChange('aboutImageUrl', url)}
+                businessId={businessData?.id || null}
+              />
+            </div>
           </div>
         </div>
 
@@ -209,7 +279,7 @@ export default function StoreBuilderPage() {
             <div 
               className="flex-1 overflow-y-auto"
               style={{
-                backgroundColor: config.themeMode === 'dark' ? '#09090b' : '#ffffff',
+                backgroundColor: config.backgroundColor,
                 color: config.themeMode === 'dark' ? '#fafafa' : '#09090b',
                 minHeight: '600px'
               }}
@@ -217,7 +287,11 @@ export default function StoreBuilderPage() {
               {/* Fake Store Navbar */}
               <div className="flex items-center justify-between border-b border-border/20 px-6 py-4">
                 <div className="flex items-center gap-2 font-bold" style={{ color: config.primaryColor }}>
-                  <Store className="h-6 w-6" />
+                  {config.logoUrl ? (
+                    <img src={config.logoUrl} alt="Logo" className="h-8 w-8 rounded-lg object-cover" />
+                  ) : (
+                    <Store className="h-6 w-6" />
+                  )}
                   MiNegocio Demo
                 </div>
                 <div className="flex gap-4 text-sm opacity-70">
@@ -251,6 +325,23 @@ export default function StoreBuilderPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Fake About Section */}
+              {config.aboutText && (
+                <div className="border-t border-border/20 px-6 py-12">
+                  <div className="grid gap-6 sm:grid-cols-2 sm:items-center">
+                    <div>
+                      <h3 className="mb-3 text-2xl font-bold">Sobre Nosotros</h3>
+                      <p className="whitespace-pre-line text-sm opacity-80">{config.aboutText}</p>
+                    </div>
+                    {config.aboutImageUrl && (
+                      <div className="aspect-video overflow-hidden rounded-xl">
+                        <img src={config.aboutImageUrl} alt="Sobre Nosotros" className="h-full w-full object-cover" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Fake Product Grid */}
               <div className="px-6 py-12">
