@@ -1,10 +1,19 @@
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import prisma from '@/lib/prisma';
-import { Store, ShoppingBag, Package, ChevronRight, X, Plus, Minus, Trash2, CheckCircle, Loader } from 'lucide-react';
+import { Store, ShoppingBag, Package, ChevronRight, ChevronLeft, X, Plus, Minus, Trash2, CheckCircle, Loader, Gift } from 'lucide-react';
 
 interface Product {
+  id: string;
+  name: string;
+  description: string | null;
+  price: string;
+  imageUrl: string | null;
+  stock: number;
+}
+
+interface ComboOffer {
   id: string;
   name: string;
   description: string | null;
@@ -26,10 +35,18 @@ interface StorefrontProps {
   aboutText: string | null;
   aboutImageUrl: string | null;
   products: Product[];
+  offers: ComboOffer[];
 }
 
+// Products and combo offers are sold the same way on the storefront, so the
+// cart tracks them in one unified shape (kind+id disambiguates the two).
 interface CartItem {
-  product: Product;
+  kind: 'product' | 'combo';
+  id: string;
+  name: string;
+  price: string;
+  imageUrl: string | null;
+  stock: number;
   quantity: number;
 }
 
@@ -40,8 +57,10 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     where: { slug: businessSlug },
     include: {
       storefront: true,
-      products: {
-        where: { stock: { gt: 0 } },
+      products: true,
+      combos: {
+        where: { isActive: true },
+        include: { items: true },
         orderBy: { createdAt: 'desc' },
       },
     },
@@ -50,6 +69,18 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   if (!business) return { notFound: true };
 
   const sf = business.storefront;
+
+  // A combo's available stock is capped by its scarcest component — e.g. a
+  // combo needing 2x of a product that only has 3 left can sell at most 1.
+  const comboAvailableStock = (items: { productId: string; quantity: unknown }[]) => {
+    if (items.length === 0) return 0;
+    return Math.min(
+      ...items.map((ci) => {
+        const product = business.products.find((p) => p.id === ci.productId);
+        return product ? Math.floor(Number(product.stock) / Number(ci.quantity)) : 0;
+      })
+    );
+  };
 
   return {
     props: {
@@ -64,14 +95,26 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       logoUrl: sf?.logoUrl || null,
       aboutText: sf?.aboutText || null,
       aboutImageUrl: sf?.aboutImageUrl || null,
-      products: business.products.map(p => ({
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        price: p.price.toString(),
-        imageUrl: p.imageUrl || null,
-        stock: Number(p.stock),
-      })),
+      products: business.products
+        .filter(p => Number(p.stock) > 0)
+        .map(p => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          price: p.price.toString(),
+          imageUrl: p.imageUrl || null,
+          stock: Number(p.stock),
+        })),
+      offers: business.combos
+        .map(c => ({
+          id: c.id,
+          name: c.name,
+          description: c.description,
+          price: c.price.toString(),
+          imageUrl: c.imageUrl || null,
+          stock: comboAvailableStock(c.items),
+        }))
+        .filter(c => c.stock > 0),
     },
   };
 };
@@ -89,6 +132,7 @@ export default function StorefrontPage({
   aboutText,
   aboutImageUrl,
   products,
+  offers,
 }: StorefrontProps) {
   const isDark = themeMode === 'dark';
   const bgColor = backgroundColor || (isDark ? '#09090b' : '#f8fafc');
@@ -112,7 +156,14 @@ export default function StorefrontPage({
   useEffect(() => {
     try {
       const saved = localStorage.getItem(CART_KEY);
-      if (saved) setCart(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Guard against an older cart shape (pre-offers) lingering in a
+        // customer's browser — discard it rather than render broken items.
+        if (Array.isArray(parsed) && parsed.every((i) => i && i.kind && i.id)) {
+          setCart(parsed);
+        }
+      }
     } catch {}
   }, [CART_KEY]);
   useEffect(() => {
@@ -121,29 +172,35 @@ export default function StorefrontPage({
     } catch {}
   }, [cart, CART_KEY]);
 
-  const addToCart = useCallback((product: Product) => {
+  const addToCart = useCallback((kind: 'product' | 'combo', entry: Product | ComboOffer) => {
     setCart(prev => {
-      const existing = prev.find(i => i.product.id === product.id);
+      const existing = prev.find(i => i.kind === kind && i.id === entry.id);
       if (existing) {
-        if (existing.quantity >= product.stock) return prev;
-        return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+        if (existing.quantity >= entry.stock) return prev;
+        return prev.map(i => i.kind === kind && i.id === entry.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      return [...prev, { product, quantity: 1 }];
+      return [...prev, { kind, id: entry.id, name: entry.name, price: entry.price, imageUrl: entry.imageUrl, stock: entry.stock, quantity: 1 }];
     });
     setCartOpen(true);
   }, []);
 
-  const changeQty = (productId: string, delta: number) => {
+  const changeQty = (kind: 'product' | 'combo', id: string, delta: number) => {
     setCart(prev => prev
-      .map(i => i.product.id === productId ? { ...i, quantity: i.quantity + delta } : i)
+      .map(i => i.kind === kind && i.id === id ? { ...i, quantity: i.quantity + delta } : i)
       .filter(i => i.quantity > 0)
     );
   };
 
-  const removeItem = (productId: string) => setCart(prev => prev.filter(i => i.product.id !== productId));
+  const removeItem = (kind: 'product' | 'combo', id: string) => setCart(prev => prev.filter(i => !(i.kind === kind && i.id === id)));
 
-  const cartTotal = cart.reduce((s, i) => s + Number(i.product.price) * i.quantity, 0);
+  const cartTotal = cart.reduce((s, i) => s + Number(i.price) * i.quantity, 0);
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
+
+  // Offers slider
+  const offersScrollRef = useRef<HTMLDivElement>(null);
+  const scrollOffers = (dir: 'left' | 'right') => {
+    offersScrollRef.current?.scrollBy({ left: dir === 'left' ? -300 : 300, behavior: 'smooth' });
+  };
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,7 +216,9 @@ export default function StorefrontPage({
           customerName: checkoutForm.name,
           customerEmail: checkoutForm.email || undefined,
           customerPhone: checkoutForm.phone || undefined,
-          items: cart.map(i => ({ productId: i.product.id, quantity: i.quantity })),
+          items: cart.map(i => i.kind === 'combo'
+            ? { comboId: i.id, quantity: i.quantity }
+            : { productId: i.id, quantity: i.quantity }),
         }),
       });
       if (!res.ok) {
@@ -245,32 +304,35 @@ export default function StorefrontPage({
                   ) : (
                     <div className="space-y-4">
                       {cart.map(item => (
-                        <div key={item.product.id} className="flex gap-4 rounded-xl p-3" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }}>
+                        <div key={`${item.kind}-${item.id}`} className="flex gap-4 rounded-xl p-3" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }}>
                           {/* Image */}
                           <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }}>
-                            {item.product.imageUrl ? (
-                              <img src={item.product.imageUrl} alt={item.product.name} className="h-full w-full object-cover" />
+                            {item.imageUrl ? (
+                              <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
                             ) : (
                               <div className="flex h-full items-center justify-center">
-                                <Package className="h-8 w-8 opacity-20" />
+                                {item.kind === 'combo' ? <Gift className="h-8 w-8 opacity-20" /> : <Package className="h-8 w-8 opacity-20" />}
                               </div>
                             )}
                           </div>
                           {/* Details */}
                           <div className="flex flex-1 flex-col">
-                            <p className="font-semibold text-sm leading-tight">{item.product.name}</p>
-                            <p className="mt-1 font-bold" style={{ color: primaryColor }}>${Number(item.product.price).toFixed(2)}</p>
+                            <p className="font-semibold text-sm leading-tight flex items-center gap-1.5">
+                              {item.kind === 'combo' && <Gift className="h-3.5 w-3.5 shrink-0" style={{ color: primaryColor }} />}
+                              {item.name}
+                            </p>
+                            <p className="mt-1 font-bold" style={{ color: primaryColor }}>${Number(item.price).toFixed(2)}</p>
                             <div className="mt-2 flex items-center justify-between">
                               <div className="flex items-center gap-2 rounded-lg border" style={{ borderColor }}>
-                                <button onClick={() => changeQty(item.product.id, -1)} className="flex h-7 w-7 items-center justify-center hover:opacity-70">
+                                <button onClick={() => changeQty(item.kind, item.id, -1)} className="flex h-7 w-7 items-center justify-center hover:opacity-70">
                                   <Minus className="h-3.5 w-3.5" />
                                 </button>
                                 <span className="w-6 text-center text-sm font-semibold tabular-nums">{item.quantity}</span>
-                                <button onClick={() => changeQty(item.product.id, 1)} disabled={item.quantity >= item.product.stock} className="flex h-7 w-7 items-center justify-center hover:opacity-70 disabled:opacity-30">
+                                <button onClick={() => changeQty(item.kind, item.id, 1)} disabled={item.quantity >= item.stock} className="flex h-7 w-7 items-center justify-center hover:opacity-70 disabled:opacity-30">
                                   <Plus className="h-3.5 w-3.5" />
                                 </button>
                               </div>
-                              <button onClick={() => removeItem(item.product.id)} className="text-red-400 hover:text-red-500">
+                              <button onClick={() => removeItem(item.kind, item.id)} className="text-red-400 hover:text-red-500">
                                 <Trash2 className="h-4 w-4" />
                               </button>
                             </div>
@@ -325,9 +387,9 @@ export default function StorefrontPage({
                   <div className="rounded-xl p-4 space-y-2 mt-4" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }}>
                     <p className="text-sm font-semibold mb-2">Resumen del pedido</p>
                     {cart.map(i => (
-                      <div key={i.product.id} className="flex justify-between text-sm" style={{ color: mutedText }}>
-                        <span>{i.product.name} x{i.quantity}</span>
-                        <span>${(Number(i.product.price) * i.quantity).toFixed(2)}</span>
+                      <div key={`${i.kind}-${i.id}`} className="flex justify-between text-sm" style={{ color: mutedText }}>
+                        <span>{i.name} x{i.quantity}</span>
+                        <span>${(Number(i.price) * i.quantity).toFixed(2)}</span>
                       </div>
                     ))}
                     <div className="flex justify-between font-bold pt-2 border-t" style={{ borderColor }}>
@@ -436,6 +498,104 @@ export default function StorefrontPage({
         </div>
       </div>
 
+      {/* Offers Slider */}
+      {offers.length > 0 && (
+        <section className="border-b py-16" style={{ borderColor, backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)' }}>
+          <div className="container mx-auto max-w-7xl px-6">
+            <div className="mb-8 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ backgroundColor: `${primaryColor}20` }}>
+                  <Gift className="h-6 w-6" style={{ color: primaryColor }} />
+                </div>
+                <div>
+                  <h2 className="flex flex-wrap items-center gap-2 text-3xl font-black tracking-tight">
+                    Ofertas
+                    <span className="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide text-white" style={{ backgroundColor: primaryColor }}>
+                      Precio especial
+                    </span>
+                  </h2>
+                  <p className="text-sm" style={{ color: mutedText }}>Combos armados a un precio más conveniente</p>
+                </div>
+              </div>
+              <div className="hidden shrink-0 gap-2 sm:flex">
+                <button
+                  onClick={() => scrollOffers('left')}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border transition-colors hover:opacity-70"
+                  style={{ borderColor }}
+                  aria-label="Ver ofertas anteriores"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={() => scrollOffers('right')}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border transition-colors hover:opacity-70"
+                  style={{ borderColor }}
+                  aria-label="Ver más ofertas"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div ref={offersScrollRef} className="-mx-6 flex snap-x snap-mandatory gap-6 overflow-x-auto px-6 pb-4">
+              {offers.map(offer => {
+                const inCart = cart.find(i => i.kind === 'combo' && i.id === offer.id);
+                return (
+                  <div
+                    key={offer.id}
+                    className="group relative flex w-72 shrink-0 snap-start flex-col overflow-hidden rounded-3xl border-2 shadow-lg transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl"
+                    style={{ borderColor: primaryColor, backgroundColor: cardBg }}
+                  >
+                    <span
+                      className="absolute left-4 top-4 z-10 rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide text-white shadow-lg"
+                      style={{ backgroundColor: primaryColor }}
+                    >
+                      Oferta
+                    </span>
+                    <div className="aspect-square overflow-hidden" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }}>
+                      {offer.imageUrl ? (
+                        <img src={offer.imageUrl} alt={offer.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                      ) : (
+                        <div className="flex h-full items-center justify-center">
+                          <Gift className="h-20 w-20 opacity-10" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-1 flex-col p-5">
+                      <h3 className="text-lg font-bold tracking-tight">{offer.name}</h3>
+                      <p className="mt-1 line-clamp-2 flex-1 text-sm leading-relaxed" style={{ color: mutedText }}>{offer.description || 'Combo especial'}</p>
+                      <div className="mt-4 flex items-center justify-between border-t pt-3" style={{ borderColor }}>
+                        <span className="text-xl font-black" style={{ color: primaryColor }}>${Number(offer.price).toFixed(2)}</span>
+                        {inCart ? (
+                          <div className="flex items-center gap-2 rounded-xl border px-2.5 py-1" style={{ borderColor }}>
+                            <button onClick={() => changeQty('combo', offer.id, -1)} className="hover:opacity-70">
+                              <Minus className="h-3.5 w-3.5" />
+                            </button>
+                            <span className="w-5 text-center text-sm font-bold tabular-nums">{inCart.quantity}</span>
+                            <button onClick={() => changeQty('combo', offer.id, 1)} disabled={inCart.quantity >= offer.stock} className="hover:opacity-70 disabled:opacity-30">
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => addToCart('combo', offer)}
+                            className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-white transition-all hover:brightness-110"
+                            style={{ backgroundColor: primaryColor }}
+                          >
+                            <ShoppingBag className="h-3.5 w-3.5" />
+                            Agregar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* About Section */}
       {aboutText && (
         <section className="container mx-auto max-w-7xl px-6 py-20 border-b" style={{ borderColor }}>
@@ -464,7 +624,7 @@ export default function StorefrontPage({
         ) : (
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {products.map(product => {
-              const inCart = cart.find(i => i.product.id === product.id);
+              const inCart = cart.find(i => i.kind === 'product' && i.id === product.id);
               return (
                 <div
                   key={product.id}
@@ -489,17 +649,17 @@ export default function StorefrontPage({
                       <span className="text-2xl font-black" style={{ color: primaryColor }}>${Number(product.price).toFixed(2)}</span>
                       {inCart ? (
                         <div className="flex items-center gap-2 rounded-xl border px-3 py-1.5" style={{ borderColor }}>
-                          <button onClick={() => changeQty(product.id, -1)} className="hover:opacity-70">
+                          <button onClick={() => changeQty('product', product.id, -1)} className="hover:opacity-70">
                             <Minus className="h-4 w-4" />
                           </button>
                           <span className="w-5 text-center text-sm font-bold tabular-nums">{inCart.quantity}</span>
-                          <button onClick={() => changeQty(product.id, 1)} disabled={inCart.quantity >= product.stock} className="hover:opacity-70 disabled:opacity-30">
+                          <button onClick={() => changeQty('product', product.id, 1)} disabled={inCart.quantity >= product.stock} className="hover:opacity-70 disabled:opacity-30">
                             <Plus className="h-4 w-4" />
                           </button>
                         </div>
                       ) : (
                         <button
-                          onClick={() => addToCart(product)}
+                          onClick={() => addToCart('product', product)}
                           className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-all hover:brightness-110"
                           style={{ backgroundColor: primaryColor }}
                         >

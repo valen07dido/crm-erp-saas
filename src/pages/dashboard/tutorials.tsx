@@ -92,6 +92,7 @@ const sections: Section[] = [
       'Al venderlo se registra como una sola línea en la venta (ej: "Combo Familiar x2 — $10000"), pero por atrás se descuenta el stock de cada producto que lo compone.',
       'Si no tenés stock suficiente de alguno de los componentes, el sistema no te va a dejar vender más combos de los que realmente podés armar.',
       'Desmarcá "Oferta activa" para ocultarla del Punto de Venta sin borrarla (útil para pausar una promo).',
+      'Las ofertas activas (y con stock suficiente de sus componentes) también aparecen en tu tienda online, en una sección "Ofertas" destacada arriba de todo, para que los clientes las vean primero.',
     ],
   },
   {
