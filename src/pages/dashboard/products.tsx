@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { ImageUploadField } from '@/components/ui/image-upload-field';
 import { BarcodeScanField } from '@/components/ui/barcode-scan-field';
@@ -17,6 +17,10 @@ import {
   Scale,
   ScanBarcode,
   PackageSearch,
+  Percent,
+  Printer,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react';
 
 interface Product {
@@ -50,6 +54,7 @@ export default function ProductsPage() {
     expirationDate: '', soldByWeight: false,
   });
   const [businessId, setBusinessId] = useState<string | null>(null);
+  const [businessName, setBusinessName] = useState('');
   const [saving, setSaving] = useState(false);
   const [showScanModal, setShowScanModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -60,6 +65,17 @@ export default function ProductsPage() {
   const [expiryFilter, setExpiryFilter] = useState<'all' | 'soon' | 'expired'>('all');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
+
+  // Bulk price adjustment (by category or hand-picked products)
+  const [showPriceAdjustModal, setShowPriceAdjustModal] = useState(false);
+  const [adjustScope, setAdjustScope] = useState<'category' | 'selected'>('category');
+  const [adjustCategory, setAdjustCategory] = useState('');
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const [adjustProductSearch, setAdjustProductSearch] = useState('');
+  const [adjustDirection, setAdjustDirection] = useState<'increase' | 'decrease'>('increase');
+  const [adjustType, setAdjustType] = useState<'percent' | 'fixed'>('percent');
+  const [adjustValue, setAdjustValue] = useState('');
+  const [adjustSaving, setAdjustSaving] = useState(false);
 
   const fetchProducts = async (bId: string) => {
     try {
@@ -84,6 +100,7 @@ export default function ProductsPage() {
         if (meRes.ok) {
           const { business } = await meRes.json();
           setBusinessId(business.id);
+          setBusinessName(business.name || '');
           fetchProducts(business.id);
         }
       } catch (e) {
@@ -137,11 +154,13 @@ export default function ProductsPage() {
     if (!businessId) return;
     setSaving(true);
     try {
+      const rawStock = parseFloat(form.stock) || 0;
       const payload = {
         name: form.name,
         description: form.description || null,
-        price: parseFloat(form.price) || 0,
-        stock: parseFloat(form.stock) || 0,
+        price: Math.max(0, parseFloat(form.price) || 0),
+        // Fractional quantities only make sense for products sold by weight.
+        stock: Math.max(0, form.soldByWeight ? rawStock : Math.round(rawStock)),
         imageUrl: form.imageUrl || null,
         barcode: form.barcode || null,
         category: form.category || null,
@@ -279,6 +298,148 @@ export default function ProductsPage() {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
+  // Weighable products (sold by kg) rarely have a real manufacturer barcode,
+  // so the plan is to assign each one a short hand-picked code — like a
+  // scale's PLU — and type it into the product's "barcode" field. This sheet
+  // is the printable reference for picking/writing those codes at the counter.
+  const weighableProducts = useMemo(
+    () => products.filter((p) => p.soldByWeight).sort((a, b) => a.name.localeCompare(b.name)),
+    [products]
+  );
+
+  const handlePrintWeighableList = () => {
+    if (weighableProducts.length === 0) {
+      alertMessage('No hay productos pesables para listar', 'info');
+      return;
+    }
+    const win = window.open('', '_blank');
+    if (!win) return;
+    const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+    const rows = weighableProducts
+      .map((p) => `
+        <tr>
+          <td class="code">${p.barcode ? esc(p.barcode) : ''}</td>
+          <td class="name">${esc(p.name)}${p.category ? `<span class="cat">${esc(p.category)}</span>` : ''}</td>
+          <td class="price">$${Number(p.price).toFixed(2)}<span class="unit">/kg</span></td>
+        </tr>`)
+      .join('');
+    win.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Lista de códigos — pesables — ${businessName}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: Arial, Helvetica, sans-serif; margin: 24px; color: #111; }
+            h1 { font-size: 20px; margin-bottom: 2px; }
+            .subtitle { color: #555; font-size: 13px; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; }
+            td { padding: 10px 6px; border-bottom: 1px solid #ddd; }
+            td.code { font-size: 15px; font-weight: 700; width: 70px; }
+            td.name { font-size: 17px; font-weight: 600; }
+            td.name .cat { display: block; font-size: 12px; font-weight: 400; color: #666; }
+            td.price { font-size: 20px; font-weight: 800; text-align: right; white-space: nowrap; }
+            td.price .unit { margin-left: 2px; font-size: 12px; font-weight: 400; color: #666; }
+            @media print {
+              body { margin: 10mm; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>${esc(businessName || 'Mi Negocio')}</h1>
+          <p class="subtitle">Productos pesables — código para anotar/asignar (tipo PLU de balanza) y precio por kg · ${new Date().toLocaleDateString('es-AR')}</p>
+          <table>${rows}</table>
+        </body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
+  // Bulk price adjustment ---------------------------------------------------
+
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    products.forEach((p) => { if (p.category) set.add(p.category); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [products]);
+
+  const applyAdjustment = (price: number, direction: 'increase' | 'decrease', type: 'percent' | 'fixed', value: number) => {
+    const delta = type === 'percent' ? price * (value / 100) : value;
+    const result = direction === 'increase' ? price + delta : price - delta;
+    return Math.max(0, Math.round(result * 100) / 100);
+  };
+
+  const adjustValueNum = Math.max(0, parseFloat(adjustValue) || 0);
+
+  const adjustCandidates = useMemo(() => {
+    if (adjustScope === 'category') {
+      if (!adjustCategory) return [];
+      if (adjustCategory === '__none__') return products.filter((p) => !p.category);
+      return products.filter((p) => p.category === adjustCategory);
+    }
+    return products.filter((p) => selectedProductIds.has(p.id));
+  }, [adjustScope, adjustCategory, selectedProductIds, products]);
+
+  const adjustPreview = useMemo(
+    () => adjustCandidates.map((p) => ({
+      ...p,
+      newPrice: applyAdjustment(Number(p.price), adjustDirection, adjustType, adjustValueNum),
+    })),
+    [adjustCandidates, adjustDirection, adjustType, adjustValueNum]
+  );
+
+  const toggleSelectedProduct = (id: string) => {
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const resetPriceAdjustModal = () => {
+    setShowPriceAdjustModal(false);
+    setAdjustScope('category');
+    setAdjustCategory('');
+    setSelectedProductIds(new Set());
+    setAdjustProductSearch('');
+    setAdjustDirection('increase');
+    setAdjustType('percent');
+    setAdjustValue('');
+  };
+
+  const handleApplyPriceAdjustment = async () => {
+    if (!businessId || adjustPreview.length === 0 || adjustValueNum <= 0) return;
+    setAdjustSaving(true);
+    try {
+      const res = await fetch('/api/products/bulk-price-adjust', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
+        body: JSON.stringify({
+          productIds: adjustPreview.map((p) => p.id),
+          direction: adjustDirection,
+          type: adjustType,
+          value: adjustValueNum,
+        }),
+      });
+      if (res.ok) {
+        const { products: updated } = await res.json();
+        setProducts((prev) => prev.map((p) => updated.find((u: Product) => u.id === p.id) || p));
+        toastSuccess(`Precio actualizado en ${updated.length} producto${updated.length === 1 ? '' : 's'}`);
+        resetPriceAdjustModal();
+      } else {
+        alertMessage('Error al ajustar los precios');
+      }
+    } catch (err) {
+      console.error('Error applying bulk price adjustment', err);
+      alertMessage('Error de conexión');
+    } finally {
+      setAdjustSaving(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -286,13 +447,28 @@ export default function ProductsPage() {
           <h1 className="text-3xl font-bold">Productos</h1>
           <p className="mt-1 text-muted-foreground">Gestiona el inventario de tu negocio</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => setShowScanModal(true)}
             className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-card px-4 py-2.5 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/10"
           >
             <ScanBarcode className="h-4 w-4" />
             Escanear
+          </button>
+          <button
+            onClick={handlePrintWeighableList}
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent"
+            title="Lista para imprimir de productos pesables, para asignarles un código corto (PLU)"
+          >
+            <Printer className="h-4 w-4" />
+            Imprimir pesables
+          </button>
+          <button
+            onClick={() => setShowPriceAdjustModal(true)}
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent"
+          >
+            <Percent className="h-4 w-4" />
+            Ajustar precios
           </button>
           <button
             onClick={() => setShowImportModal(true)}
@@ -437,7 +613,9 @@ export default function ProductsPage() {
                       }`}
                     >
                       {Number(product.stock) <= 5 && <AlertCircle className="h-3 w-3" />}
-                      {product.soldByWeight ? `${Number(product.stock).toFixed(3)} kg` : Number(product.stock)}
+                      {product.soldByWeight
+                        ? `${Number(product.stock).toLocaleString('es-AR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg`
+                        : Number(product.stock)}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
@@ -511,6 +689,187 @@ export default function ProductsPage() {
         </div>
       )}
 
+      {/* Bulk price adjustment */}
+      {showPriceAdjustModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !adjustSaving && resetPriceAdjustModal()} />
+          <div className="relative flex max-h-[92vh] w-full max-w-lg flex-col animate-slide-up rounded-2xl border border-border/50 bg-card shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-6 py-4">
+              <h2 className="flex items-center gap-2 text-lg font-semibold">
+                <Percent className="h-5 w-5 text-primary" />
+                Ajustar precios
+              </h2>
+              <button onClick={() => !adjustSaving && resetPriceAdjustModal()} className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-4">
+              {/* Scope */}
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">¿A quién aplica?</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAdjustScope('category')}
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${adjustScope === 'category' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-accent'}`}
+                  >
+                    Por categoría
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdjustScope('selected')}
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${adjustScope === 'selected' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-accent'}`}
+                  >
+                    Productos seleccionados
+                  </button>
+                </div>
+              </div>
+
+              {adjustScope === 'category' ? (
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">Categoría</label>
+                  <select
+                    value={adjustCategory}
+                    onChange={(e) => setAdjustCategory(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Elegí una categoría...</option>
+                    {categories.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                    <option value="__none__">(Sin categoría)</option>
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">
+                    Productos <span className="text-xs font-normal text-muted-foreground">({selectedProductIds.size} seleccionados)</span>
+                  </label>
+                  <input
+                    value={adjustProductSearch}
+                    onChange={(e) => setAdjustProductSearch(e.target.value)}
+                    placeholder="Buscar producto..."
+                    className="mb-2 h-9 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-border/50">
+                    {products
+                      .filter((p) => p.name.toLowerCase().includes(adjustProductSearch.toLowerCase()))
+                      .map((p) => (
+                        <label key={p.id} className="flex items-center gap-2 border-b border-border/30 px-3 py-2 text-sm last:border-b-0 hover:bg-accent">
+                          <input
+                            type="checkbox"
+                            checked={selectedProductIds.has(p.id)}
+                            onChange={() => toggleSelectedProduct(p.id)}
+                            className="h-4 w-4 shrink-0 rounded border-border text-primary focus:ring-primary"
+                          />
+                          <span className="flex-1 truncate">{p.name}</span>
+                          <span className="shrink-0 font-mono text-xs text-muted-foreground">${Number(p.price).toFixed(2)}</span>
+                        </label>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Direction + type */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">Dirección</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAdjustDirection('increase')}
+                      className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-sm font-medium transition-colors ${adjustDirection === 'increase' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-border hover:bg-accent'}`}
+                    >
+                      <TrendingUp className="h-4 w-4" /> Subir
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdjustDirection('decrease')}
+                      className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-sm font-medium transition-colors ${adjustDirection === 'decrease' ? 'border-red-500 bg-red-500/10 text-red-400' : 'border-border hover:bg-accent'}`}
+                    >
+                      <TrendingDown className="h-4 w-4" /> Bajar
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">Tipo</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAdjustType('percent')}
+                      className={`rounded-lg border px-2 py-2 text-sm font-medium transition-colors ${adjustType === 'percent' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-accent'}`}
+                    >
+                      %
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdjustType('fixed')}
+                      className={`rounded-lg border px-2 py-2 text-sm font-medium transition-colors ${adjustType === 'fixed' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-accent'}`}
+                    >
+                      $
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">
+                  {adjustType === 'percent' ? 'Porcentaje' : 'Monto fijo'}
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={adjustValue}
+                  onChange={(e) => setAdjustValue(e.target.value)}
+                  placeholder={adjustType === 'percent' ? '10' : '100.00'}
+                  className="h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+
+              {/* Preview */}
+              {adjustPreview.length > 0 && (
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">
+                    Vista previa <span className="text-xs font-normal text-muted-foreground">({adjustPreview.length} producto{adjustPreview.length === 1 ? '' : 's'})</span>
+                  </label>
+                  <div className="max-h-48 overflow-y-auto rounded-lg border border-border/50">
+                    {adjustPreview.map((p) => (
+                      <div key={p.id} className="flex items-center justify-between gap-2 border-b border-border/30 px-3 py-2 text-sm last:border-b-0">
+                        <span className="flex-1 truncate">{p.name}</span>
+                        <span className="shrink-0 font-mono text-xs text-muted-foreground line-through">${Number(p.price).toFixed(2)}</span>
+                        <span className={`shrink-0 font-mono text-sm font-semibold ${adjustDirection === 'increase' ? 'text-emerald-400' : 'text-red-400'}`}>
+                          ${p.newPrice.toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex shrink-0 gap-3 border-t border-border/50 px-6 py-4">
+              <button type="button" onClick={resetPriceAdjustModal} className="flex h-10 flex-1 items-center justify-center rounded-lg border border-border text-sm font-medium transition-all duration-200 hover:bg-accent">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyPriceAdjustment}
+                disabled={adjustSaving || adjustPreview.length === 0 || adjustValueNum <= 0}
+                className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg gradient-primary text-sm font-medium text-white shadow-lg shadow-primary/25 transition-all duration-200 hover:shadow-xl hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
+              >
+                {adjustSaving ? (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                ) : (
+                  `Aplicar${adjustPreview.length > 0 ? ` a ${adjustPreview.length}` : ''}`
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -574,11 +933,11 @@ export default function ProductsPage() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-1.5 block text-sm font-medium">{form.soldByWeight ? 'Precio por Kg' : 'Precio'}</label>
-                    <input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="0.00" />
+                    <input type="number" step="0.01" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="0.00" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-medium">{form.soldByWeight ? 'Stock (Kg)' : 'Stock'}</label>
-                    <input type="number" step={form.soldByWeight ? '0.001' : '1'} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="0" />
+                    <input type="number" step={form.soldByWeight ? '0.001' : '1'} min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30" placeholder="0" />
                   </div>
                 </div>
 

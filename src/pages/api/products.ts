@@ -5,6 +5,17 @@ import prisma from '@/lib/prisma';
  * Simple CRUD API for Product model.
  * The tenant (business) is identified via the `x-business-id` header.
  */
+
+// Price is never negative; stock is never negative, and only a weighable
+// product can carry a fractional quantity (kg) — any other product's stock
+// is a whole unit count.
+function sanitizeStock(stock: number, soldByWeight: boolean): number {
+  const n = Math.max(0, Number(stock) || 0);
+  return soldByWeight ? n : Math.round(n);
+}
+function sanitizePrice(price: number): number {
+  return Math.max(0, Number(price) || 0);
+}
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const businessId = req.headers['x-business-id'];
   if (!businessId || typeof businessId !== 'string') {
@@ -41,8 +52,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           data: {
             name,
             description,
-            price: price ?? 0,
-            stock: stock ?? 0,
+            price: sanitizePrice(price ?? 0),
+            stock: sanitizeStock(stock ?? 0, soldByWeight ?? false),
             imageUrl: req.body.imageUrl || null,
             barcode: barcode || null,
             category: category || null,
@@ -69,11 +80,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           expirationDate: string | null;
           soldByWeight: boolean;
         }>;
-        const { expirationDate, ...rest } = body;
+        const { expirationDate, price, stock, soldByWeight, ...rest } = body;
+        let effectiveSoldByWeight = soldByWeight;
+        if (stock !== undefined && effectiveSoldByWeight === undefined) {
+          const existing = await prisma.product.findUnique({ where: { id }, select: { soldByWeight: true } });
+          effectiveSoldByWeight = existing?.soldByWeight ?? false;
+        }
         const product = await prisma.product.update({
           where: { id },
           data: {
             ...rest,
+            ...(soldByWeight !== undefined && { soldByWeight }),
+            ...(price !== undefined && { price: sanitizePrice(price) }),
+            ...(stock !== undefined && { stock: sanitizeStock(stock, effectiveSoldByWeight ?? false) }),
             ...(expirationDate !== undefined && { expirationDate: expirationDate ? new Date(expirationDate) : null }),
           },
         });

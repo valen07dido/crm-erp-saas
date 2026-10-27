@@ -36,11 +36,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           printTicketOnSale?: boolean;
         };
         const clampHour = (h: number) => Math.min(23, Math.max(0, h));
+        const clampTaxRate = (t: number) => Math.min(100, Math.max(0, t));
         const settings = await prisma.businessSettings.upsert({
           where: { businessId },
           update: {
             ...(currency !== undefined && { currency }),
-            ...(taxRate !== undefined && { taxRate }),
+            ...(taxRate !== undefined && { taxRate: clampTaxRate(taxRate) }),
             ...(shiftMorningStartHour !== undefined && { shiftMorningStartHour: clampHour(shiftMorningStartHour) }),
             ...(shiftMorningEndHour !== undefined && { shiftMorningEndHour: clampHour(shiftMorningEndHour) }),
             ...(shiftNightStartHour !== undefined && { shiftNightStartHour: clampHour(shiftNightStartHour) }),
@@ -53,7 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           create: {
             businessId,
             currency: currency ?? 'USD',
-            taxRate: taxRate ?? 0,
+            taxRate: taxRate !== undefined ? clampTaxRate(taxRate) : 0,
             shiftMorningStartHour: shiftMorningStartHour !== undefined ? clampHour(shiftMorningStartHour) : 8,
             shiftMorningEndHour: shiftMorningEndHour !== undefined ? clampHour(shiftMorningEndHour) : 12,
             shiftNightStartHour: shiftNightStartHour !== undefined ? clampHour(shiftNightStartHour) : 16,
@@ -61,7 +62,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             shiftMorningLabel: shiftMorningLabel ?? 'Turno Mañana',
             shiftNightLabel: shiftNightLabel ?? 'Turno Noche',
             ticketWidthMm: ticketWidthMm ?? 58,
-            printTicketOnSale: printTicketOnSale ?? true,
+            printTicketOnSale: printTicketOnSale ?? false,
           },
         });
         return res.status(200).json(settings);

@@ -21,7 +21,7 @@ export default function SettingsPage() {
   const [shiftMorningLabel, setShiftMorningLabel] = useState('Turno Mañana');
   const [shiftNightLabel, setShiftNightLabel] = useState('Turno Noche');
   const [ticketWidthMm, setTicketWidthMm] = useState('58');
-  const [printTicketOnSale, setPrintTicketOnSale] = useState(true);
+  const [printTicketOnSale, setPrintTicketOnSale] = useState(false);
 
   // Storefront states
   const [sf, setSf] = useState({
@@ -60,7 +60,7 @@ export default function SettingsPage() {
             setShiftMorningLabel(bsData.shiftMorningLabel || 'Turno Mañana');
             setShiftNightLabel(bsData.shiftNightLabel || 'Turno Noche');
             setTicketWidthMm(String(bsData.ticketWidthMm ?? 58));
-            setPrintTicketOnSale(bsData.printTicketOnSale ?? true);
+            setPrintTicketOnSale(bsData.printTicketOnSale ?? false);
           }
 
           // Fetch storefront settings
@@ -324,6 +324,9 @@ export default function SettingsPage() {
                         <label className="mb-1.5 block text-sm font-medium">Tasa de Impuesto (%)</label>
                         <input
                           type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
                           value={taxRate}
                           onChange={(e) => setTaxRate(e.target.value)}
                           className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"

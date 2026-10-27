@@ -111,7 +111,7 @@ model BusinessSettings {
 
   // Receipt/ticket printing (thermal printer paper width in mm — 58 or 80 are common)
   ticketWidthMm     Int     @default(58)
-  printTicketOnSale Boolean @default(true)
+  printTicketOnSale Boolean @default(false)
 }
 
 model BusinessUser {

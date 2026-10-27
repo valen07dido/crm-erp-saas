@@ -49,7 +49,7 @@ const sections: Section[] = [
     summary: 'Pantalla pensada para el mostrador: escaneás o buscás productos, arma el carrito y cobrás.',
     tips: [
       'El cursor queda siempre listo en el buscador de arriba — solo escaneá el código de barras y se agrega solo.',
-      'Si escaneás un código que no corresponde a ningún producto cargado, te va a ofrecer crearlo al toque (nombre, precio y stock inicial) y lo agrega directo a la venta en curso — no hace falta ser administrador, cualquier usuario puede hacerlo desde acá.',
+      'Si escaneás un código que no corresponde a ningún producto cargado, te va a ofrecer crearlo al toque (nombre, precio, stock inicial, categoría y vencimiento opcionales) y lo agrega directo a la venta en curso — no hace falta ser administrador, cualquier usuario puede hacerlo desde acá. Si tildás "Se vende por peso (Kg)" en esa misma alta, te pide el peso antes de agregarlo, igual que con cualquier producto pesable.',
       'Arriba del buscador están las pestañas "Venta 1" a "Venta 4" — hasta 4 cajeros pueden tener cada uno su propia venta en curso en la misma pantalla sin pisarse: cambiar de pestaña no borra lo que tenía cargado la otra.',
       'El buscador manual y el botón "Precio" filtran tanto por nombre y código de barras como por la Descripción cargada en el producto.',
       'Usá "Modo Cajero" (pantalla completa) cuando estés atendiendo para no distraerte con el resto del panel.',
@@ -77,6 +77,8 @@ const sections: Section[] = [
       'El ícono de stock se pone naranja/rojo cuando queda poco — es tu aviso para reponer.',
       'Marcá "Se vende por peso (Kg)" para productos como quesos, fiambres o carnes — el precio pasa a ser por kilo y en el Punto de Venta te va a pedir el peso en vez de una cantidad entera.',
       'Cargá la "Fecha de Vencimiento" en productos perecederos — cuando falten 7 días o menos (o ya esté vencido) aparece un aviso en rojo/naranja debajo del nombre del producto en esta misma lista.',
+      '"Ajustar precios" te deja subir o bajar el precio de golpe a varios productos — por categoría (ej: todos los "Fideos") o eligiéndolos uno por uno — con un porcentaje o un monto fijo. Antes de aplicar te muestra una vista previa de cómo queda cada precio.',
+      '"Imprimir pesables" genera una planilla con todos los productos "Se vende por peso (Kg)" — pensada para asignarles a mano un código corto (como el PLU de una balanza) y anotarlo, para después cargarlo en el campo "Código de barras" de cada producto y poder buscarlos rápido en el Punto de Venta.',
     ],
   },
   {

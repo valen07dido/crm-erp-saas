@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import {
@@ -149,8 +149,8 @@ export default function POSPage() {
   // Receipt printing config
   const [businessName, setBusinessName] = useState('');
   const [ticketWidthMm, setTicketWidthMm] = useState(58);
-  const [printTicketOnSale, setPrintTicketOnSale] = useState(true);
-  const [printThisSale, setPrintThisSale] = useState(true);
+  const [printTicketOnSale, setPrintTicketOnSale] = useState(false);
+  const [printThisSale, setPrintThisSale] = useState(false);
 
   // Weight entry prompt (for products sold by weight)
   const [weightPromptFor, setWeightPromptFor] = useState<Sellable | null>(null);
@@ -160,7 +160,7 @@ export default function POSPage() {
 
   // Quick-create: a scanned/typed code that didn't match any product
   const [quickCreateCode, setQuickCreateCode] = useState<string | null>(null);
-  const [quickCreateForm, setQuickCreateForm] = useState({ name: '', price: '', stock: '1', category: '', expirationDate: '' });
+  const [quickCreateForm, setQuickCreateForm] = useState({ name: '', price: '', stock: '1', category: '', expirationDate: '', soldByWeight: false });
   const [quickCreateSaving, setQuickCreateSaving] = useState(false);
 
   // Load data
@@ -201,8 +201,8 @@ export default function POSPage() {
         if (settingsRes.ok) {
           const settings = await settingsRes.json();
           setTicketWidthMm(settings.ticketWidthMm ?? 58);
-          setPrintTicketOnSale(settings.printTicketOnSale ?? true);
-          setPrintThisSale(settings.printTicketOnSale ?? true);
+          setPrintTicketOnSale(settings.printTicketOnSale ?? false);
+          setPrintThisSale(settings.printTicketOnSale ?? false);
         }
       } catch (e) {
         console.error('POS init error', e);
@@ -248,8 +248,10 @@ export default function POSPage() {
     }
   }, [weightPromptFor]);
 
-  // Combined list of products + active combos, sharing the same searchable shape
-  const sellables: Sellable[] = [
+  // Combined list of products + active combos, sharing the same searchable shape.
+  // Memoized because comboAvailableStock scans every product per combo item —
+  // recomputing this on every keystroke/render visibly lagged with a larger catalog.
+  const sellables: Sellable[] = useMemo(() => [
     ...products.map((p) => ({ kind: 'product' as const, id: p.id, name: p.name, description: p.description, price: Number(p.price), barcode: p.barcode, stock: Number(p.stock), soldByWeight: p.soldByWeight })),
     ...combos.filter((c) => c.isActive).map((c) => ({
       kind: 'combo' as const,
@@ -261,7 +263,7 @@ export default function POSPage() {
       stock: comboAvailableStock(c, products),
       soldByWeight: false,
     })),
-  ];
+  ], [products, combos]);
 
   // Add product/combo to cart
   const addToCart = useCallback((sellable: Sellable, quantity: number = 1) => {
@@ -336,7 +338,7 @@ export default function POSPage() {
       setTimeout(() => barcodeRef.current?.classList.remove('animate-shake'), 500);
     } else {
       // Nothing matches this code at all — offer to create it on the spot.
-      setQuickCreateForm({ name: '', price: '', stock: '1', category: '', expirationDate: '' });
+      setQuickCreateForm({ name: '', price: '', stock: '1', category: '', expirationDate: '', soldByWeight: false });
       setQuickCreateCode(code);
       setBarcodeInput('');
     }
@@ -354,24 +356,30 @@ export default function POSPage() {
     if (!businessId || !quickCreateCode) return;
     setQuickCreateSaving(true);
     try {
+      const rawStock = parseFloat(quickCreateForm.stock) || 0;
+      // Fractional quantities only make sense for products sold by weight —
+      // a non-weighable product's stock is always a whole unit count.
+      const stock = Math.max(0, quickCreateForm.soldByWeight ? rawStock : Math.round(rawStock));
+      const price = Math.max(0, parseFloat(quickCreateForm.price) || 0);
       const res = await fetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
         body: JSON.stringify({
           name: quickCreateForm.name,
-          price: parseFloat(quickCreateForm.price) || 0,
-          stock: parseFloat(quickCreateForm.stock) || 0,
+          price,
+          stock,
           barcode: quickCreateCode,
           category: quickCreateForm.category || null,
           expirationDate: quickCreateForm.expirationDate || null,
+          soldByWeight: quickCreateForm.soldByWeight,
         }),
       });
       if (res.ok) {
         const newProduct = await res.json();
         setProducts(prev => [newProduct, ...prev]);
-        // Add directly from the response instead of looking it up in
+        // Build directly from the response instead of looking it up in
         // `products` state (which hasn't re-rendered with it yet here).
-        addToCart({
+        const createdSellable: Sellable = {
           kind: 'product',
           id: newProduct.id,
           name: newProduct.name,
@@ -380,9 +388,17 @@ export default function POSPage() {
           barcode: newProduct.barcode,
           stock: Number(newProduct.stock),
           soldByWeight: newProduct.soldByWeight,
-        });
+        };
         setQuickCreateCode(null);
-        toastSuccess(`${newProduct.name} creado y agregado a la venta`);
+        if (createdSellable.soldByWeight) {
+          // Same as picking a weighable product normally — ask for the
+          // actual weight instead of guessing a quantity.
+          handleSelectSellable(createdSellable);
+          toastSuccess(`${newProduct.name} creado — ingresá el peso`);
+        } else {
+          addToCart(createdSellable);
+          toastSuccess(`${newProduct.name} creado y agregado a la venta`);
+        }
       } else {
         alertMessage('Error al crear el producto');
       }
@@ -1072,10 +1088,11 @@ export default function POSPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium">Precio</label>
+                  <label className="mb-1.5 block text-sm font-medium">{quickCreateForm.soldByWeight ? 'Precio por Kg' : 'Precio'}</label>
                   <input
                     type="number"
                     step="0.01"
+                    min="0"
                     value={quickCreateForm.price}
                     onChange={(e) => setQuickCreateForm({ ...quickCreateForm, price: e.target.value })}
                     placeholder="0.00"
@@ -1083,10 +1100,11 @@ export default function POSPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium">Stock inicial</label>
+                  <label className="mb-1.5 block text-sm font-medium">{quickCreateForm.soldByWeight ? 'Stock inicial (Kg)' : 'Stock inicial'}</label>
                   <input
                     type="number"
-                    step="1"
+                    step={quickCreateForm.soldByWeight ? '0.001' : '1'}
+                    min="0"
                     value={quickCreateForm.stock}
                     onChange={(e) => setQuickCreateForm({ ...quickCreateForm, stock: e.target.value })}
                     placeholder="1"
@@ -1094,6 +1112,16 @@ export default function POSPage() {
                   />
                 </div>
               </div>
+              <label className="flex items-center gap-2 rounded-lg border border-border/50 bg-background/50 px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  checked={quickCreateForm.soldByWeight}
+                  onChange={(e) => setQuickCreateForm({ ...quickCreateForm, soldByWeight: e.target.checked })}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <Scale className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="text-sm font-medium">Se vende por peso (Kg) — ej: quesos, fiambres, carnes</span>
+              </label>
               <div>
                 <label className="mb-1.5 block text-sm font-medium">Categoría (Opcional)</label>
                 <input

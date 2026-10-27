@@ -40,7 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           data: {
             name,
             description: description || null,
-            price: price ?? 0,
+            price: Math.max(0, price ?? 0),
             imageUrl: imageUrl || null,
             barcode: barcode || null,
             isActive: isActive ?? true,
@@ -83,7 +83,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             data: {
               ...(name !== undefined && { name }),
               ...(description !== undefined && { description: description || null }),
-              ...(price !== undefined && { price }),
+              ...(price !== undefined && { price: Math.max(0, price) }),
               ...(imageUrl !== undefined && { imageUrl: imageUrl || null }),
               ...(barcode !== undefined && { barcode: barcode || null }),
               ...(isActive !== undefined && { isActive }),

@@ -423,7 +423,7 @@ export function createDemoSeed(): DemoDb {
       shiftMorningLabel: 'Turno Mañana',
       shiftNightLabel: 'Turno Noche',
       ticketWidthMm: 58,
-      printTicketOnSale: true,
+      printTicketOnSale: false,
     },
     storefront: {
       id: id('storefront'),

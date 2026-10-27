@@ -368,6 +368,7 @@ export default function OffersPage() {
                   <input
                     type="number"
                     step="0.01"
+                    min="0"
                     value={form.price}
                     onChange={(e) => setForm({ ...form, price: e.target.value })}
                     required

@@ -19,6 +19,7 @@ interface Product {
   name: string;
   price: number;
   barcode: string | null;
+  soldByWeight: boolean;
 }
 
 interface Supplier {
@@ -169,8 +170,13 @@ export default function PurchasesPage() {
   };
 
   const updateCartItem = (productId: string, field: 'quantity' | 'price', value: string) => {
-    const numValue = parseFloat(value) || 0;
-    setCart(prev => prev.map(item => item.productId === productId ? { ...item, [field]: numValue } : item));
+    setCart(prev => prev.map(item => {
+      if (item.productId !== productId) return item;
+      let numValue = Math.max(0, parseFloat(value) || 0);
+      // Fractional quantities only make sense for products sold by weight.
+      if (field === 'quantity' && !item.product?.soldByWeight) numValue = Math.round(numValue);
+      return { ...item, [field]: numValue };
+    }));
   };
 
   const removeFromCart = (productId: string) => {
@@ -276,7 +282,8 @@ export default function PurchasesPage() {
         if (field === 'name' || field === 'barcode') {
           return { ...item, [field]: value };
         }
-        const numValue = parseFloat(value) || 0;
+        let numValue = Math.max(0, parseFloat(value) || 0);
+        if (field === 'quantity') numValue = Math.round(numValue);
         if (field === 'cost') {
           return { ...item, cost: numValue, salePrice: Math.round(numValue * (1 + margin / 100) * 100) / 100 };
         }
@@ -515,11 +522,18 @@ export default function PurchasesPage() {
                         <span className="flex-1 font-medium">{item.product?.name}</span>
                         <div className="flex items-center gap-2">
                           <label className="text-xs text-muted-foreground">Cant:</label>
-                          <input type="number" min="1" value={item.quantity} onChange={e => updateCartItem(item.productId, 'quantity', e.target.value)} className="h-8 w-16 rounded border border-input bg-background px-2 text-right" />
+                          <input
+                            type="number"
+                            min={item.product?.soldByWeight ? '0.001' : '1'}
+                            step={item.product?.soldByWeight ? '0.001' : '1'}
+                            value={item.quantity}
+                            onChange={e => updateCartItem(item.productId, 'quantity', e.target.value)}
+                            className="h-8 w-16 rounded border border-input bg-background px-2 text-right"
+                          />
                         </div>
                         <div className="flex items-center gap-2">
                           <label className="text-xs text-muted-foreground">Costo Unit:</label>
-                          <input type="number" step="0.01" value={item.price} onChange={e => updateCartItem(item.productId, 'price', e.target.value)} className="h-8 w-24 rounded border border-input bg-background px-2 text-right" />
+                          <input type="number" step="0.01" min="0" value={item.price} onChange={e => updateCartItem(item.productId, 'price', e.target.value)} className="h-8 w-24 rounded border border-input bg-background px-2 text-right" />
                         </div>
                         <span className="w-20 text-right font-mono font-semibold">${(item.quantity * item.price).toFixed(2)}</span>
                         <button type="button" onClick={() => removeFromCart(item.productId)} className="text-red-400 hover:text-red-300">
@@ -579,6 +593,7 @@ export default function PurchasesPage() {
                 <input
                   type="number"
                   step="0.01"
+                  min="0"
                   value={quickCreateForm.price}
                   onChange={(e) => setQuickCreateForm({ ...quickCreateForm, price: e.target.value })}
                   placeholder="0.00"
@@ -743,6 +758,7 @@ export default function PurchasesPage() {
                             <input
                               type="number"
                               step="0.01"
+                              min="0"
                               value={item.cost}
                               onChange={(e) => updateImportItem(item.id, 'cost', e.target.value)}
                               className="h-8 w-24 rounded border border-input bg-background px-2 text-right"
@@ -752,6 +768,7 @@ export default function PurchasesPage() {
                             <input
                               type="number"
                               step="0.01"
+                              min="0"
                               value={item.salePrice}
                               onChange={(e) => updateImportItem(item.id, 'salePrice', e.target.value)}
                               className="h-8 w-24 rounded border border-input bg-background px-2 text-right font-semibold"
