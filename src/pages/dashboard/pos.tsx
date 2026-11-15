@@ -28,6 +28,7 @@ import {
 import { alertMessage, toastSuccess } from '@/lib/alerts';
 import { printTicket, TicketData } from '@/lib/printTicket';
 import { CameraScanButton } from '@/components/ui/camera-scan-button';
+import { isModuleAllowed } from '@/lib/plans';
 
 interface Product {
   id: string;
@@ -100,6 +101,10 @@ const emptySlot = (): CartSlot => ({ cart: [], selectedClient: '' });
 export default function POSPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [combos, setCombos] = useState<Combo[]>([]);
+  // Ofertas/combos belong to the "/dashboard/offers" module (PRO+) — a BASIC
+  // business shouldn't see or sell them from POS either, even if some combos
+  // are still sitting in the DB from a plan downgrade.
+  const [offersEnabled, setOffersEnabled] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
   const [slots, setSlots] = useState<CartSlot[]>(() => Array.from({ length: SLOT_COUNT }, emptySlot));
   const [activeSlot, setActiveSlot] = useState(0);
@@ -172,6 +177,8 @@ export default function POSPage() {
         const { business } = await meRes.json();
         setBusinessId(business.id);
         setBusinessName(business.name || '');
+        const offersAllowed = isModuleAllowed(business.planName, '/dashboard/offers');
+        setOffersEnabled(offersAllowed);
 
         // Restore any in-progress carts left parked in slots (e.g. a page
         // refresh shouldn't lose a cashier's half-built sale).
@@ -191,12 +198,12 @@ export default function POSPage() {
 
         const [prodRes, comboRes, cliRes, settingsRes] = await Promise.all([
           fetch('/api/products', { headers: { 'x-business-id': business.id } }),
-          fetch('/api/combos', { headers: { 'x-business-id': business.id } }),
+          offersAllowed ? fetch('/api/combos', { headers: { 'x-business-id': business.id } }) : Promise.resolve(null),
           fetch('/api/clients', { headers: { 'x-business-id': business.id } }),
           fetch('/api/business-settings', { headers: { 'x-business-id': business.id } }),
         ]);
         if (prodRes.ok) setProducts(await prodRes.json());
-        if (comboRes.ok) setCombos(await comboRes.json());
+        if (comboRes?.ok) setCombos(await comboRes.json());
         if (cliRes.ok) setClients(await cliRes.json());
         if (settingsRes.ok) {
           const settings = await settingsRes.json();
@@ -546,10 +553,10 @@ export default function POSPage() {
       // Reload products/combos to refresh stock
       const [prodRes, comboRes] = await Promise.all([
         fetch('/api/products', { headers: { 'x-business-id': businessId } }),
-        fetch('/api/combos', { headers: { 'x-business-id': businessId } }),
+        offersEnabled ? fetch('/api/combos', { headers: { 'x-business-id': businessId } }) : Promise.resolve(null),
       ]);
       if (prodRes.ok) setProducts(await prodRes.json());
-      if (comboRes.ok) setCombos(await comboRes.json());
+      if (comboRes?.ok) setCombos(await comboRes.json());
     } catch {
       alertMessage('Error de conexión');
     } finally {

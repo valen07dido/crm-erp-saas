@@ -1,8 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth/next';
-import bcrypt from 'bcryptjs';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { getDataSource } from '@/lib/datasource';
 
 /**
  * Lets a business's ADMIN manage the staff logins for their OWN business
@@ -21,7 +20,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ error: 'No autorizado' });
   }
 
-  const callerMembership = await prisma.businessUser.findFirst({ where: { userId: callerId, businessId } });
+  const dataSource = await getDataSource();
+
+  const callerMembership = await dataSource.membership.find(callerId, businessId);
   if (!callerMembership || callerMembership.role !== 'ADMIN') {
     return res.status(403).json({ error: 'Solo un administrador puede gestionar usuarios' });
   }
@@ -29,11 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     switch (req.method) {
       case 'GET': {
-        const businessUsers = await prisma.businessUser.findMany({
-          where: { businessId },
-          include: { user: { select: { id: true, email: true, username: true, name: true } } },
-          orderBy: { createdAt: 'asc' },
-        });
+        const businessUsers = await dataSource.businessUsers.list(businessId);
         return res.status(200).json(businessUsers);
       }
 
@@ -56,47 +53,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (!/^[a-z0-9_.-]{3,32}$/.test(normalizedUsername)) {
           return res.status(400).json({ error: 'El usuario debe tener entre 3 y 32 caracteres (letras, números, _ . -)' });
         }
-        if (password.length < 4) {
-          return res.status(400).json({ error: 'La contraseña es muy corta' });
+        if (password.length < 8) {
+          return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
         }
 
-        const existing = await prisma.user.findFirst({
-          where: { OR: [{ email: normalizedEmail }, { username: normalizedUsername }] },
-        });
-        if (existing) {
-          return res.status(409).json({
-            error: existing.email === normalizedEmail ? 'El email ya está registrado' : 'El usuario ya está en uso',
-          });
+        const conflict = await dataSource.businessUsers.findConflict(normalizedEmail, normalizedUsername);
+        if (conflict) {
+          return res.status(409).json({ error: conflict === 'email' ? 'El email ya está registrado' : 'El usuario ya está en uso' });
         }
 
-        // This business's own placeholder Role row (created at signup) — reused
-        // as the FK target; actual access is gated by BusinessUser.role (string).
-        let placeholderRole = await prisma.role.findFirst({ where: { businessId } });
-        if (!placeholderRole) {
-          placeholderRole = await prisma.role.create({
-            data: { name: `staff-${businessId}`, businessId },
-          });
-        }
-
-        const result = await prisma.$transaction(async (tx) => {
-          const user = await tx.user.create({
-            data: {
-              email: normalizedEmail,
-              username: normalizedUsername,
-              name: name || null,
-              passwordHash: bcrypt.hashSync(password, 10),
-            },
-          });
-          const businessUser = await tx.businessUser.create({
-            data: {
-              userId: user.id,
-              businessId,
-              roleId: placeholderRole!.id,
-              role: finalRole,
-            },
-            include: { user: { select: { id: true, email: true, username: true, name: true } } },
-          });
-          return businessUser;
+        const result = await dataSource.businessUsers.create({
+          businessId,
+          name: name || null,
+          email: normalizedEmail,
+          username: normalizedUsername,
+          password,
+          role: finalRole,
         });
 
         return res.status(201).json(result);
@@ -109,42 +81,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (role !== undefined && role !== 'ADMIN' && role !== 'POS') {
           return res.status(400).json({ error: 'Rol inválido' });
         }
-        if (password !== undefined && password.length < 4) {
-          return res.status(400).json({ error: 'La contraseña es muy corta' });
+        if (password !== undefined && password.length < 8) {
+          return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
         }
 
-        const target = await prisma.businessUser.findUnique({ where: { id } });
+        const target = await dataSource.businessUsers.findById(id);
         if (!target || target.businessId !== businessId) {
           return res.status(404).json({ error: 'Usuario no encontrado en este negocio' });
         }
 
-        const updated = await prisma.businessUser.update({
-          where: { id },
-          data: role !== undefined ? { role } : {},
-          include: { user: { select: { id: true, email: true, username: true, name: true } } },
-        });
-
-        if (password) {
-          await prisma.user.update({
-            where: { id: target.userId },
-            data: { passwordHash: bcrypt.hashSync(password, 10) },
-          });
-        }
-
+        const updated = await dataSource.businessUsers.update(id, businessId, { role, password });
         return res.status(200).json(updated);
       }
 
       case 'DELETE': {
         const { id } = req.query as { id: string };
         if (!id) return res.status(400).json({ error: 'Missing id' });
-        const target = await prisma.businessUser.findUnique({ where: { id } });
+        const target = await dataSource.businessUsers.findById(id);
         if (!target || target.businessId !== businessId) {
           return res.status(404).json({ error: 'Usuario no encontrado en este negocio' });
         }
         if (target.userId === callerId) {
           return res.status(400).json({ error: 'No podés eliminarte a vos mismo' });
         }
-        await prisma.businessUser.delete({ where: { id } });
+        await dataSource.businessUsers.delete(id, businessId);
         return res.status(204).end();
       }
 

@@ -1,6 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pdfParse from '@/lib/pdf-parse-safe';
 import { parseInvoiceText } from '@/lib/invoice-parser';
+import { requireModule } from '@/lib/server/plan-guard';
+import { requireBusinessMembership } from '@/lib/server/auth-guard';
 
 export const config = {
   api: {
@@ -17,6 +19,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+  if (!(await requireBusinessMembership(req, res, businessId))) return;
+  if (!(await requireModule(businessId, '/dashboard/purchases', res))) return;
 
   try {
     const { fileBase64 } = req.body;

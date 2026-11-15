@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
+import { requireBusinessMembership } from '@/lib/server/auth-guard';
 
 /**
  * Bulk price change for a hand-picked set of products belonging to the
@@ -22,6 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader('Allow', ['POST']);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
+  if (!(await requireBusinessMembership(req, res, businessId))) return;
 
   try {
     const { productIds, direction, type, value } = req.body as {

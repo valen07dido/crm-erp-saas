@@ -36,8 +36,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (password !== undefined) {
-      if (typeof password !== 'string' || password.length < 4) {
-        return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+      if (typeof password !== 'string' || password.length < 8) {
+        return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
       }
       data.passwordHash = bcrypt.hashSync(password, 10);
     }

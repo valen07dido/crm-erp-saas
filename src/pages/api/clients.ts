@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import prisma from '@/lib/prisma';
+import { getDataSource } from '@/lib/datasource';
+import { requireBusinessMembership } from '@/lib/server/auth-guard';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const businessId = req.headers['x-business-id'] as string;
@@ -7,13 +8,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!businessId) {
     return res.status(401).json({ error: 'Missing business ID' });
   }
+  if (!(await requireBusinessMembership(req, res, businessId))) return;
+
+  const dataSource = await getDataSource();
 
   if (req.method === 'GET') {
     try {
-      const clients = await prisma.client.findMany({
-        where: { businessId },
-        orderBy: { createdAt: 'desc' },
-      });
+      const clients = await dataSource.clients.list(businessId);
       return res.status(200).json(clients);
     } catch (error) {
       return res.status(500).json({ error: 'Error fetching clients' });
@@ -23,9 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'POST') {
     try {
       const { name, email, phone, address } = req.body;
-      const client = await prisma.client.create({
-        data: { name, email, phone, address, businessId },
-      });
+      const client = await dataSource.clients.create(businessId, { name, email, phone, address });
       return res.status(201).json(client);
     } catch (error) {
       return res.status(500).json({ error: 'Error creating client' });
@@ -36,10 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const { id } = req.query;
       const { name, email, phone, address } = req.body;
-      const client = await prisma.client.update({
-        where: { id: String(id), businessId },
-        data: { name, email, phone, address },
-      });
+      const client = await dataSource.clients.update(String(id), businessId, { name, email, phone, address });
       return res.status(200).json(client);
     } catch (error) {
       return res.status(500).json({ error: 'Error updating client' });
@@ -49,9 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'DELETE') {
     try {
       const { id } = req.query;
-      await prisma.client.delete({
-        where: { id: String(id), businessId },
-      });
+      await dataSource.clients.delete(String(id), businessId);
       return res.status(204).end();
     } catch (error) {
       return res.status(500).json({ error: 'Error deleting client' });

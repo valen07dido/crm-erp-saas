@@ -255,11 +255,30 @@ function buildTicketPdf(ticket) {
   });
 }
 
-function sendJson(res, status, body) {
+// Only these origins may call the agent via fetch() from a browser tab.
+// Listening on 127.0.0.1 alone doesn't stop this: any webpage open on the
+// same PC can hit localhost ports, and the browser's own CORS preflight is
+// the only thing standing between "some random site the cashier has open"
+// and silently printing/enumerating printers. Echo the origin back ONLY
+// when it's on this list; otherwise omit the header so the browser blocks
+// the preflight (POST with a JSON body always preflights) and the request
+// never reaches /print.
+const ALLOWED_ORIGINS = new Set([
+  'https://crm-erp-saas.vercel.app',
+  'http://localhost:3000',
+  `http://127.0.0.1:${process.env.WALTI_DESKTOP_EMBEDDED_PORT || 47821}`,
+]);
+
+function corsHeaders(req) {
+  const origin = req.headers.origin;
+  return ALLOWED_ORIGINS.has(origin) ? { 'Access-Control-Allow-Origin': origin } : {};
+}
+
+function sendJson(req, res, status, body) {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
+    ...corsHeaders(req),
   });
   res.end(payload);
 }
@@ -276,7 +295,7 @@ function readBody(req) {
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
+      ...corsHeaders(req),
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     });
@@ -284,15 +303,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && req.url === '/ping') {
-    return sendJson(res, 200, { ok: true, agent: 'walti-print-agent' });
+    return sendJson(req, res, 200, { ok: true, agent: 'walti-print-agent' });
   }
 
   if (req.method === 'GET' && req.url === '/printers') {
     try {
       const printers = await getPrinters();
-      return sendJson(res, 200, { ok: true, printers, configured: PRINTER_NAME || '(predeterminada de Windows)' });
+      return sendJson(req, res, 200, { ok: true, printers, configured: PRINTER_NAME || '(predeterminada de Windows)' });
     } catch (err) {
-      return sendJson(res, 500, { ok: false, error: String(err) });
+      return sendJson(req, res, 500, { ok: false, error: String(err) });
     }
   }
 
@@ -318,17 +337,17 @@ const server = http.createServer(async (req, res) => {
           scale: 'noscale',
           monochrome: true,
         });
-        return sendJson(res, 200, { ok: true });
+        return sendJson(req, res, 200, { ok: true });
       } finally {
         fs.unlink(tmpFile, () => {});
       }
     } catch (err) {
       console.error('Error al imprimir:', err);
-      return sendJson(res, 500, { ok: false, error: String(err) });
+      return sendJson(req, res, 500, { ok: false, error: String(err) });
     }
   }
 
-  sendJson(res, 404, { ok: false, error: 'Not found' });
+  sendJson(req, res, 404, { ok: false, error: 'Not found' });
 });
 
 if (require.main === module) {

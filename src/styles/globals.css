@@ -2,49 +2,107 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * WALTI — Intelligence for Business
+ * Design tokens. Two full palettes (light = default, dark = opt-in via the
+ * `.dark` class on <html>, toggled client-side and persisted — see
+ * _document.tsx and the ThemeToggle component).
+ *
+ * Each token is stored as an unitless "R G B" triplet, not a hex string —
+ * Tailwind can only apply its `/NN` opacity modifiers (used all over this
+ * app already: `border-border/50`, `bg-card/95`, `bg-primary/10`, etc.) to a
+ * color value shaped like `rgb(var(--x))`, by rewriting it to
+ * `rgb(var(--x) / <alpha>)`. A bare hex value behind `var(--x)` can't be
+ * rewritten that way — Tailwind can't see through a CSS variable at build
+ * time — so every utility using an opacity modifier would silently emit no
+ * color at all. See tailwind.config.ts, where every token is wired through
+ * `rgb(var(--x) / <alpha-value>)`.
+ *
+ * Electric Lime (--primary) is a fill/accent only — it's too light to pass
+ * WCAG AA as a text color on either background, so it always pairs with
+ * --primary-foreground (graphite in light mode, near-black in dark) as the
+ * text/icon color drawn ON TOP of it, never the other way around.
+ */
 @layer base {
   :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 6.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 6.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 263.4 70% 50.4%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
-    --radius: 0.75rem;
-    --success: 142 76% 36%;
-    --warning: 38 92% 50%;
+    --background: 245 241 233;        /* Warm Ivory #F5F1E9 */
+    --foreground: 37 43 50;           /* Deep Charcoal #252B32 */
+    --card: 255 255 255;              /* Pure White */
+    --card-foreground: 37 43 50;
+    --popover: 255 255 255;
+    --popover-foreground: 37 43 50;
+    --primary: 214 243 106;           /* Electric Lime #D6F36A — accent, not a text color */
+    --primary-foreground: 32 37 43;   /* Graphite #20252B */
+    --secondary: 61 148 136;          /* Petroleum Green #3D9488 */
+    --secondary-foreground: 255 255 255;
+    --muted: 237 232 221;
+    --muted-foreground: 90 98 104;    /* darkened from the brief's #7B858C — that was too
+                                          pale as real text/icon color on white/ivory (~1.7:1,
+                                          fails WCAG AA); this reads as the same "muted gray"
+                                          but passes contrast for small text and UI icons. */
+    --accent: 237 232 221;
+    --accent-foreground: 37 43 50;
+    --destructive: 193 79 79;         /* sober red, not alarm red #C14F4F */
+    --destructive-foreground: 255 255 255;
+    --border: 229 225 216;            /* Soft Stone #E5E1D8 */
+    --input: 229 225 216;
+    --ring: 61 148 136;
+    --radius: 0.625rem;
+    --success: 47 143 91;             /* #2F8F5B */
+    --warning: 217 140 43;            /* #D98C2B */
+    --danger: 193 79 79;
+    --info: 61 148 136;
+    --graphite: 32 37 43;             /* fixed brand chrome color — sidebar, both themes */
+    --lime: 214 243 106;
+    --ivory: 245 241 233;
+  }
+
+  .dark {
+    --background: 20 23 27;           /* #14171B */
+    --foreground: 242 239 232;        /* #F2EFE8 */
+    --card: 32 37 43;                 /* Graphite becomes the surface color in dark mode */
+    --card-foreground: 242 239 232;
+    --popover: 38 44 51;              /* #262C33 */
+    --popover-foreground: 242 239 232;
+    --primary: 214 243 106;           /* accent stays identical across themes */
+    --primary-foreground: 20 23 27;
+    --secondary: 69 169 156;          /* #45A99C */
+    --secondary-foreground: 14 21 19; /* #0E1513 */
+    --muted: 38 44 51;
+    --muted-foreground: 154 163 170;  /* #9AA3AA */
+    --accent: 42 48 56;               /* #2A3038 */
+    --accent-foreground: 242 239 232;
+    --destructive: 224 117 117;       /* #E07575 */
+    --destructive-foreground: 20 23 27;
+    --border: 48 54 61;               /* #30363D */
+    --input: 48 54 61;
+    --ring: 69 169 156;
+    --success: 76 174 120;            /* #4CAE78 */
+    --warning: 227 162 76;            /* #E3A24C */
+    --danger: 224 117 117;
+    --info: 69 169 156;
+    --graphite: 32 37 43;
+    --lime: 214 243 106;
+    --ivory: 245 241 233;
   }
 
   * {
-    border-color: hsl(var(--border));
+    border-color: rgb(var(--border));
   }
 
   body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
-    font-family: var(--font-inter), system-ui, sans-serif;
+    background-color: rgb(var(--background));
+    color: rgb(var(--foreground));
+    font-family: var(--font-dm-sans), system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Dark, theme-matching scrollbars — browsers default to a light scrollbar
-     that clashes with this app's dark theme (Firefox + Chromium/Edge/Safari). */
+  /* Theme-matching scrollbars — browsers default to a light scrollbar that
+     clashes with a dark background (Firefox + Chromium/Edge/Safari). */
   * {
     scrollbar-width: thin;
-    scrollbar-color: hsl(var(--border)) transparent;
+    scrollbar-color: rgb(var(--border)) transparent;
   }
 
   *::-webkit-scrollbar {
@@ -57,34 +115,63 @@
   }
 
   *::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--border));
+    background-color: rgb(var(--border));
     border-radius: 9999px;
     border: 2px solid transparent;
     background-clip: content-box;
   }
 
   *::-webkit-scrollbar-thumb:hover {
-    background-color: hsl(var(--muted-foreground));
+    background-color: rgb(var(--muted-foreground));
     background-clip: content-box;
   }
 }
 
 @layer utilities {
   .glass {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.5);
     backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+  }
+
+  .dark .glass {
+    background: rgba(32, 37, 43, 0.5);
     border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
+  /* Existing markup across the app pairs this class with a literal
+     `text-white` utility (left over from the old blue→violet gradient
+     buttons). Lime can't take white text and stay AA-accessible, so this
+     forces the correct on-lime text color regardless of what else is on the
+     element — a deliberate, narrow override while pages get restyled one by
+     one in a later pass, not a license to reach for !important elsewhere. */
   .gradient-primary {
-    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%);
+    background: rgb(var(--lime));
+    color: rgb(var(--primary-foreground)) !important;
   }
 
   .gradient-text {
-    background: linear-gradient(135deg, hsl(217 91% 60%) 0%, hsl(263 70% 50%) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: rgb(var(--graphite));
+  }
+
+  .dark .gradient-text {
+    color: rgb(var(--lime));
+  }
+
+  /* Lots of existing pages use the `text-primary` utility for accent links
+     and highlighted numbers (confirmed in the live screenshot: "Gestionar",
+     "Ver todas"). That reads fine in dark mode — lime-on-dark is a legible,
+     attractive accent — but --primary IS Electric Lime, which fails contrast
+     as text on a light/white background. Rather than hunt down every call
+     site right now (that's the module-by-module pass later), this repoints
+     `text-primary` specifically to Petroleum Green in light mode only, so
+     every existing accent-text usage becomes readable immediately. */
+  .text-primary {
+    color: rgb(var(--secondary)) !important;
+  }
+
+  .dark .text-primary {
+    color: rgb(var(--lime)) !important;
   }
 
   .animate-fade-in {
@@ -106,6 +193,65 @@
   .animate-wave {
     animation: wave 2.4s ease-in-out infinite;
     transform-origin: 70% 70%;
+  }
+}
+
+/*
+ * StorefrontView (src/components/storefront/storefront-view.tsx) renders in
+ * two very different boxes: the full browser viewport on the real public
+ * page, and a narrow panel next to Walti Studio's settings column. Tailwind's
+ * sm:/md:/lg:/xl: prefixes key off the VIEWPORT, not the element's own box —
+ * so inside the Studio preview they'd "see" the full desktop-width browser
+ * window and lay out 3-4 columns in a panel that's actually a few hundred
+ * pixels wide, producing crushed, broken cards (this is what the screenshot
+ * showed). Container queries fix this at the source: `sf-root` below is the
+ * query container, and every `sf-*` rule responds to ITS width instead of
+ * the window's. Plain CSS, no plugin — Tailwind 3.3.5 has no built-in
+ * container-query variant.
+ */
+@layer utilities {
+  .sf-root {
+    container-type: inline-size;
+    container-name: storefront;
+  }
+
+  .sf-product-grid {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 2rem;
+  }
+  .sf-hero-title {
+    font-size: 2.75rem;
+    line-height: 1.05;
+  }
+  .sf-nav-links {
+    display: none;
+  }
+  .sf-cart-label {
+    display: none;
+  }
+  .sf-about-grid {
+    display: grid;
+    gap: 3rem;
+    grid-template-columns: 1fr;
+    align-items: center;
+  }
+
+  @container storefront (min-width: 480px) {
+    .sf-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sf-cart-label { display: inline; }
+  }
+  @container storefront (min-width: 640px) {
+    .sf-hero-title { font-size: 4rem; }
+    .sf-nav-links { display: flex; }
+  }
+  @container storefront (min-width: 768px) {
+    .sf-product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .sf-about-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sf-hero-title { font-size: 5.5rem; }
+  }
+  @container storefront (min-width: 1100px) {
+    .sf-product-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   }
 }
 

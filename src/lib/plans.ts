@@ -39,6 +39,11 @@ export const PLAN_LABELS: Record<string, string> = {
 };
 
 export function isModuleAllowed(planName: string | null | undefined, pathname: string): boolean {
+  // WALTI Desktop bakes this flag in at build time (see next.config.js) —
+  // it's a single-license product, not a tiered SaaS plan, so every module
+  // the sidebar could ever show is always unlocked.
+  if (process.env.NEXT_PUBLIC_WALTI_DESKTOP_BUILD === '1') return true;
+
   const modules = PLAN_MODULES[planName || 'BASIC'] || PLAN_MODULES.BASIC;
   return modules.some((m) => {
     // '/dashboard' is the home page itself — treating it as a prefix would
@@ -54,6 +59,10 @@ export interface BusinessStatus {
 }
 
 export function isAccountActive(business: BusinessStatus): boolean {
+  // Same reasoning as isModuleAllowed: WALTI Desktop has no plan/expiration
+  // concept at all (the local `businesses` row doesn't even have these
+  // columns) — licensing (separate from this) is its own system.
+  if (process.env.NEXT_PUBLIC_WALTI_DESKTOP_BUILD === '1') return true;
   if (!business.isActive) return false;
   if (business.planExpiresAt && new Date(business.planExpiresAt) < new Date()) return false;
   return true;

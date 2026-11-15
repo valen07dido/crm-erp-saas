@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import prisma from '@/lib/prisma';
+import { getDataSource } from '@/lib/datasource';
+import { requireModule } from '@/lib/server/plan-guard';
+import { requireBusinessMembership } from '@/lib/server/auth-guard';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const businessId = req.headers['x-business-id'] as string;
@@ -7,13 +9,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!businessId) {
     return res.status(401).json({ error: 'Missing business ID' });
   }
+  if (!(await requireBusinessMembership(req, res, businessId))) return;
+  if (!(await requireModule(businessId, '/dashboard/suppliers', res))) return;
+
+  const dataSource = await getDataSource();
 
   if (req.method === 'GET') {
     try {
-      const suppliers = await prisma.supplier.findMany({
-        where: { businessId },
-        orderBy: { createdAt: 'desc' },
-      });
+      const suppliers = await dataSource.suppliers.list(businessId);
       return res.status(200).json(suppliers);
     } catch (error) {
       return res.status(500).json({ error: 'Error fetching suppliers' });
@@ -23,9 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'POST') {
     try {
       const { name, email, phone, address } = req.body;
-      const supplier = await prisma.supplier.create({
-        data: { name, email, phone, address, businessId },
-      });
+      const supplier = await dataSource.suppliers.create(businessId, { name, email, phone, address });
       return res.status(201).json(supplier);
     } catch (error) {
       return res.status(500).json({ error: 'Error creating supplier' });
@@ -36,10 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const { id } = req.query;
       const { name, email, phone, address } = req.body;
-      const supplier = await prisma.supplier.update({
-        where: { id: String(id), businessId },
-        data: { name, email, phone, address },
-      });
+      const supplier = await dataSource.suppliers.update(String(id), businessId, { name, email, phone, address });
       return res.status(200).json(supplier);
     } catch (error) {
       return res.status(500).json({ error: 'Error updating supplier' });
@@ -49,9 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'DELETE') {
     try {
       const { id } = req.query;
-      await prisma.supplier.delete({
-        where: { id: String(id), businessId },
-      });
+      await dataSource.suppliers.delete(String(id), businessId);
       return res.status(204).end();
     } catch (error) {
       return res.status(500).json({ error: 'Error deleting supplier' });

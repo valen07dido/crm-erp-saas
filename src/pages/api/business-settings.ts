@@ -1,20 +1,20 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import prisma from '@/lib/prisma';
+import { getDataSource } from '@/lib/datasource';
+import { requireBusinessMembership } from '@/lib/server/auth-guard';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const businessId = req.headers['x-business-id'];
   if (!businessId || typeof businessId !== 'string') {
     return res.status(400).json({ error: 'Missing x-business-id header' });
   }
+  if (!(await requireBusinessMembership(req, res, businessId))) return;
+
+  const dataSource = await getDataSource();
 
   try {
     switch (req.method) {
       case 'GET': {
-        const settings = await prisma.businessSettings.upsert({
-          where: { businessId },
-          update: {},
-          create: { businessId },
-        });
+        const settings = await dataSource.businessSettings.get(businessId);
         return res.status(200).json(settings);
       }
       case 'PUT': {
@@ -35,35 +35,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ticketWidthMm?: number;
           printTicketOnSale?: boolean;
         };
-        const clampHour = (h: number) => Math.min(23, Math.max(0, h));
-        const clampTaxRate = (t: number) => Math.min(100, Math.max(0, t));
-        const settings = await prisma.businessSettings.upsert({
-          where: { businessId },
-          update: {
-            ...(currency !== undefined && { currency }),
-            ...(taxRate !== undefined && { taxRate: clampTaxRate(taxRate) }),
-            ...(shiftMorningStartHour !== undefined && { shiftMorningStartHour: clampHour(shiftMorningStartHour) }),
-            ...(shiftMorningEndHour !== undefined && { shiftMorningEndHour: clampHour(shiftMorningEndHour) }),
-            ...(shiftNightStartHour !== undefined && { shiftNightStartHour: clampHour(shiftNightStartHour) }),
-            ...(shiftNightEndHour !== undefined && { shiftNightEndHour: clampHour(shiftNightEndHour) }),
-            ...(shiftMorningLabel !== undefined && { shiftMorningLabel }),
-            ...(shiftNightLabel !== undefined && { shiftNightLabel }),
-            ...(ticketWidthMm !== undefined && { ticketWidthMm: Math.min(300, Math.max(30, ticketWidthMm)) }),
-            ...(printTicketOnSale !== undefined && { printTicketOnSale }),
-          },
-          create: {
-            businessId,
-            currency: currency ?? 'USD',
-            taxRate: taxRate !== undefined ? clampTaxRate(taxRate) : 0,
-            shiftMorningStartHour: shiftMorningStartHour !== undefined ? clampHour(shiftMorningStartHour) : 8,
-            shiftMorningEndHour: shiftMorningEndHour !== undefined ? clampHour(shiftMorningEndHour) : 12,
-            shiftNightStartHour: shiftNightStartHour !== undefined ? clampHour(shiftNightStartHour) : 16,
-            shiftNightEndHour: shiftNightEndHour !== undefined ? clampHour(shiftNightEndHour) : 21,
-            shiftMorningLabel: shiftMorningLabel ?? 'Turno Mañana',
-            shiftNightLabel: shiftNightLabel ?? 'Turno Noche',
-            ticketWidthMm: ticketWidthMm ?? 58,
-            printTicketOnSale: printTicketOnSale ?? false,
-          },
+        const settings = await dataSource.businessSettings.update(businessId, {
+          currency,
+          taxRate,
+          shiftMorningStartHour,
+          shiftMorningEndHour,
+          shiftNightStartHour,
+          shiftNightEndHour,
+          shiftMorningLabel,
+          shiftNightLabel,
+          ticketWidthMm,
+          printTicketOnSale,
         });
         return res.status(200).json(settings);
       }

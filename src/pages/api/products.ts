@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import prisma from '@/lib/prisma';
+import { getDataSource } from '@/lib/datasource';
+import { requireBusinessMembership } from '@/lib/server/auth-guard';
 
 /**
  * Simple CRUD API for Product model.
@@ -8,7 +9,8 @@ import prisma from '@/lib/prisma';
 
 // Price is never negative; stock is never negative, and only a weighable
 // product can carry a fractional quantity (kg) — any other product's stock
-// is a whole unit count.
+// is a whole unit count. Sanitized once here, regardless of which datasource
+// (Prisma/Postgres or the SQLite repositories) ends up storing the result.
 function sanitizeStock(stock: number, soldByWeight: boolean): number {
   const n = Math.max(0, Number(stock) || 0);
   return soldByWeight ? n : Math.round(n);
@@ -21,19 +23,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!businessId || typeof businessId !== 'string') {
     return res.status(400).json({ error: 'Missing x-business-id header' });
   }
+  if (!(await requireBusinessMembership(req, res, businessId))) return;
+
+  const dataSource = await getDataSource();
 
   try {
     switch (req.method) {
       case 'GET': {
-        // List products for the given business
-        const products = await prisma.product.findMany({
-          where: { businessId },
-          orderBy: { createdAt: 'desc' },
-        });
+        const products = await dataSource.products.list(businessId);
         return res.status(200).json(products);
       }
       case 'POST': {
-        // Create a new product
         const { name, description, price, stock, imageUrl, barcode, category, expirationDate, soldByWeight } = req.body as {
           name: string;
           description?: string;
@@ -48,24 +48,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (!name) {
           return res.status(400).json({ error: 'Product name is required' });
         }
-        const product = await prisma.product.create({
-          data: {
-            name,
-            description,
-            price: sanitizePrice(price ?? 0),
-            stock: sanitizeStock(stock ?? 0, soldByWeight ?? false),
-            imageUrl: req.body.imageUrl || null,
-            barcode: barcode || null,
-            category: category || null,
-            expirationDate: expirationDate ? new Date(expirationDate) : null,
-            soldByWeight: soldByWeight ?? false,
-            business: { connect: { id: businessId } },
-          },
+        const product = await dataSource.products.create({
+          businessId,
+          name,
+          description: description ?? null,
+          price: sanitizePrice(price ?? 0),
+          stock: sanitizeStock(stock ?? 0, soldByWeight ?? false),
+          imageUrl: imageUrl || null,
+          barcode: barcode || null,
+          category: category || null,
+          expirationDate: expirationDate || null,
+          soldByWeight: soldByWeight ?? false,
         });
         return res.status(201).json(product);
       }
       case 'PUT': {
-        // Update an existing product – expect id in query
         const { id } = req.query as { id: string };
         if (!id) {
           return res.status(400).json({ error: 'Product id is required in query' });
@@ -81,30 +78,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           soldByWeight: boolean;
         }>;
         const { expirationDate, price, stock, soldByWeight, ...rest } = body;
-        let effectiveSoldByWeight = soldByWeight;
-        if (stock !== undefined && effectiveSoldByWeight === undefined) {
-          const existing = await prisma.product.findUnique({ where: { id }, select: { soldByWeight: true } });
-          effectiveSoldByWeight = existing?.soldByWeight ?? false;
+        // id alone isn't enough to scope this write — it's a bare UUID with
+        // no tenant check, so without `businessId` here too, knowing/leaking
+        // any product id would let you edit a DIFFERENT business's product.
+        const existing = await dataSource.products.findById(id);
+        if (!existing || existing.businessId !== businessId) {
+          return res.status(404).json({ error: 'Product not found' });
         }
-        const product = await prisma.product.update({
-          where: { id },
-          data: {
-            ...rest,
-            ...(soldByWeight !== undefined && { soldByWeight }),
-            ...(price !== undefined && { price: sanitizePrice(price) }),
-            ...(stock !== undefined && { stock: sanitizeStock(stock, effectiveSoldByWeight ?? false) }),
-            ...(expirationDate !== undefined && { expirationDate: expirationDate ? new Date(expirationDate) : null }),
-          },
+        const effectiveSoldByWeight = soldByWeight !== undefined ? soldByWeight : existing.soldByWeight;
+        const product = await dataSource.products.update(id, {
+          ...rest,
+          ...(soldByWeight !== undefined && { soldByWeight }),
+          ...(price !== undefined && { price: sanitizePrice(price) }),
+          ...(stock !== undefined && { stock: sanitizeStock(stock, effectiveSoldByWeight ?? false) }),
+          ...(expirationDate !== undefined && { expirationDate: expirationDate || null }),
         });
         return res.status(200).json(product);
       }
       case 'DELETE': {
-        // Delete a product – expect id in query
         const { id } = req.query as { id: string };
         if (!id) {
           return res.status(400).json({ error: 'Product id is required in query' });
         }
-        await prisma.product.delete({ where: { id } });
+        const existing = await dataSource.products.findById(id);
+        if (!existing || existing.businessId !== businessId) {
+          return res.status(404).json({ error: 'Product not found' });
+        }
+        await dataSource.products.delete(id);
         return res.status(204).end();
       }
       default:

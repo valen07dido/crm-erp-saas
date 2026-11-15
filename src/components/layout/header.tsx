@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Bell, User, LogOut, Settings, ChevronDown, Package, AlertTriangle, Menu } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
+import { ThemeToggle } from './theme-toggle';
 
 interface HeaderProps {
   onOpenMobileNav?: () => void;
@@ -87,7 +88,9 @@ export function Header({ onOpenMobileNav }: HeaderProps) {
       <div className="flex-1" />
 
       {/* Right side */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        <ThemeToggle />
+
         {/* Notifications */}
         <div className="relative" ref={notifRef}>
           <button

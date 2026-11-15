@@ -265,7 +265,7 @@ export default function TeamPage() {
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium">Contraseña</label>
-                <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring" placeholder="••••••••" />
+                <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={8} className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring" placeholder="Mínimo 8 caracteres" />
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium">Rol</label>

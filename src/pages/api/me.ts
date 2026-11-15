@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { getDataSource } from '@/lib/datasource';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
@@ -16,21 +16,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Find business user relation
-    const businessUser = await prisma.businessUser.findFirst({
-      where: { userId },
-      include: {
-        business: true,
-      },
-    });
+    const dataSource = await getDataSource();
+    const membership = await dataSource.membership.findForUser(userId);
 
-    if (!businessUser) {
+    if (!membership) {
       return res.status(404).json({ error: 'Negocio no encontrado' });
     }
 
     return res.status(200).json({
-      business: businessUser.business,
-      role: businessUser.role,
+      business: membership.business,
+      role: membership.role,
     });
   } catch (error) {
     console.error('Error in /api/me:', error);

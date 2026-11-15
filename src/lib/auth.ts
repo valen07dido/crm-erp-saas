@@ -1,6 +1,6 @@
 import NextAuth, { type NextAuthOptions, type DefaultSession } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import prisma from '@/lib/prisma';
+import { getDataSource } from '@/lib/datasource';
 import bcrypt from 'bcryptjs';
 
 export const authOptions: NextAuthOptions = {
@@ -16,14 +16,8 @@ export const authOptions: NextAuthOptions = {
         // Emails and usernames are always stored lowercase — normalize the
         // typed value so login doesn't care about case (e.g. "Test" vs "test").
         const normalizedIdentifier = credentials.identifier.toLowerCase();
-        const user = await prisma.user.findFirst({
-          where: {
-            OR: [
-              { email: normalizedIdentifier },
-              { username: normalizedIdentifier },
-            ],
-          },
-        });
+        const dataSource = await getDataSource();
+        const user = await dataSource.auth.findUserByIdentifier(normalizedIdentifier);
         if (!user) return null;
 
         const isValid = bcrypt.compareSync(credentials.password, user.passwordHash);

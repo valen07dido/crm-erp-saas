@@ -4,6 +4,7 @@ print-agent/dist/
 
 # Next.js
 .next/
+.next-desktop/
 out/
 
 # Environment
@@ -14,6 +15,10 @@ out/
 # Prisma local database
 prisma/*.db
 prisma/*.db-journal
+
+# WALTI Desktop dev-mode local SQLite DB (npm run dev:desktop)
+.data/
+.scratch-test/
 
 # Logs
 *.log

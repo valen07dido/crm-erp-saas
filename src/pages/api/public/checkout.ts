@@ -28,6 +28,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // 1. Find the business
     const business = await prisma.business.findUnique({ where: { slug: businessSlug } });
     if (!business) return res.status(404).json({ error: 'Business not found' });
+    // The public storefront (and therefore checkout) is Enterprise-only —
+    // reject direct API calls for a Basic/Pro business even though its page
+    // already 404s, since this endpoint has no other auth of its own.
+    if (business.planName !== 'ENTERPRISE') return res.status(404).json({ error: 'Business not found' });
 
     const productItems = items.filter(i => i.productId);
     const comboItems = items.filter(i => i.comboId);

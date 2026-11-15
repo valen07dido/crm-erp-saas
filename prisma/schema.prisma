@@ -81,13 +81,31 @@ model Storefront {
   heroSubtitle  String?  @default("Los mejores productos al mejor precio")
   heroImageUrl  String?
   primaryColor  String?  @default("#3b82f6") // tailwind blue-500
+  secondaryColor String? @default("#3D9488") // Walti petroleum green, as a starting point — fully overridable per store
   backgroundColor String? @default("#09090b")
   themeMode     String   @default("dark")
-  
+
+  // "walti" | "clasica" | "directa" — a short, curated list of font pairings
+  // (see StorefrontView), not a free-text font picker.
+  fontPairing   String?  @default("walti")
+  // "rounded" | "pill" | "square"
+  buttonStyle   String?  @default("rounded")
+  // Reserved for the Editorial/Comercial/Bold template system — only
+  // "editorial" is implemented so far, but the column exists now so adding
+  // the other templates later doesn't need another migration.
+  template      String?  @default("editorial")
+  faviconUrl    String?
+
   logoUrl       String?
   aboutText     String?
   aboutImageUrl String?
-  
+
+  // Shown in the storefront footer/contact area — all optional.
+  contactPhone  String?
+  contactEmail  String?
+  contactAddress String?
+  whatsappNumber String?
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

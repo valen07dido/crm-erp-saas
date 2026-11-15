@@ -3,6 +3,29 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   poweredByHeader: false,
+  // Only set for WALTI Desktop's own build (`npm run build:desktop`) — never
+  // for the normal Vercel deploy (`npm run build`), which must keep behaving
+  // exactly as it did before this existed. `output: 'standalone'` bundles a
+  // self-contained `.next/standalone/server.js` that WALTI Desktop's
+  // Electron shell spawns locally instead of pointing at Vercel.
+  ...(process.env.WALTI_DESKTOP_BUILD === '1' ? { output: 'standalone' } : {}),
+  // `dev:desktop` runs in the same project folder as the normal `dev`
+  // script — without this, both would fight over the same `.next/` cache
+  // (seen as EBUSY file-lock errors when run at the same time).
+  ...(process.env.WALTI_RUNTIME === 'desktop' ? { distDir: '.next-desktop' } : {}),
+  webpack: (config, { isServer }) => {
+    // better-sqlite3 (WALTI Desktop's local DB driver) loads a native .node
+    // binary via its own runtime path-detection logic — webpack can't
+    // statically bundle that, and trying to produces a broken module instead
+    // of a clean error (observed: requiring it through the bundle silently
+    // resolved to `{}`). Marking it external makes webpack leave a plain
+    // `require('better-sqlite3')` in the output, resolved by Node directly,
+    // same as how native modules are normally used server-side.
+    if (isServer) {
+      config.externals = [...(config.externals || []), 'better-sqlite3'];
+    }
+    return config;
+  },
   async headers() {
     return [
       {

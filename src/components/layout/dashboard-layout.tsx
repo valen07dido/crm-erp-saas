@@ -9,6 +9,7 @@ import { isAccountActive, isModuleAllowed } from '@/lib/plans';
 import { isModuleAllowedForRole } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { isDemoMode, isDemoBannerDismissed, dismissDemoBanner } from '@/lib/demo-mode';
+import { getCachedMe, setCachedMe } from '@/lib/me-cache';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -18,7 +19,22 @@ type AccessStatus = 'loading' | 'ok' | 'blocked' | 'locked-module';
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
-  const [status, setStatus] = useState<AccessStatus>('loading');
+  // Each dashboard page mounts its own <DashboardLayout>, so plain client-side
+  // navigation unmounts/remounts this component on every click — a fresh
+  // useState('loading') each time. Seeding from the shared cache instead
+  // means a repeat visit already knows the right plan/role on its very first
+  // render, instead of flashing every module until a fresh /api/me resolves
+  // (see the old `!planName ||` bypass this replaced). The effect below
+  // still revalidates in the background in case the plan changed.
+  const [status, setStatus] = useState<AccessStatus>(() => {
+    const cachedMe = getCachedMe();
+    if (!cachedMe) return 'loading';
+    if (!cachedMe.business || !isAccountActive(cachedMe.business)) return 'blocked';
+    if (!isModuleAllowedForRole(cachedMe.role, router.pathname)) return 'loading'; // redirect pending
+    return isModuleAllowed(cachedMe.business.planName, router.pathname) ? 'ok' : 'locked-module';
+  });
+  const [business, setBusiness] = useState<any>(() => getCachedMe()?.business ?? null);
+  const [role, setRole] = useState<string | null>(() => getCachedMe()?.role ?? null);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -50,6 +66,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         }
         const { business, role } = await res.json();
         if (cancelled) return;
+        setCachedMe({ business, role });
+        setBusiness(business);
+        setRole(role);
         if (!business || !isAccountActive(business)) {
           setStatus('blocked');
           return;
@@ -60,7 +79,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         }
         setStatus(isModuleAllowed(business.planName, router.pathname) ? 'ok' : 'locked-module');
       } catch {
-        if (!cancelled) setStatus('ok');
+        if (!cancelled && !getCachedMe()) setStatus('ok');
       }
     };
     checkAccess();
@@ -128,6 +147,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         onToggleCollapsed={() => setCollapsed((c) => !c)}
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileNavOpen(false)}
+        businessId={business?.id ?? null}
+        businessName={business?.name ?? 'MiNegocio'}
+        planName={business?.planName ?? null}
+        role={role}
       />
       <div className={cn('transition-all duration-300', collapsed ? 'md:ml-[72px]' : 'md:ml-[260px]')}>
         <Header onOpenMobileNav={() => setMobileNavOpen(true)} />

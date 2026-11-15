@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import {
   BookOpen,
@@ -19,6 +19,9 @@ import {
   UserCog,
   LucideIcon,
 } from 'lucide-react';
+import { getCachedMe, setCachedMe } from '@/lib/me-cache';
+import { isModuleAllowed } from '@/lib/plans';
+import { isModuleAllowedForRole } from '@/lib/roles';
 
 interface Section {
   id: string;
@@ -27,6 +30,9 @@ interface Section {
   color: string;
   summary: string;
   tips: string[];
+  // The dashboard route this section documents — a tip for a screen the
+  // viewer's plan/role can't actually open would just be confusing.
+  modulePath: string;
 }
 
 const sections: Section[] = [
@@ -35,6 +41,7 @@ const sections: Section[] = [
     title: 'Dashboard',
     icon: LayoutDashboard,
     color: 'text-blue-400',
+    modulePath: '/dashboard',
     summary: 'Es la pantalla principal: te muestra un resumen rápido de cómo viene el negocio (ventas del día, stock bajo, etc.) apenas entrás.',
     tips: [
       'Usalo como punto de partida diario para detectar si hay productos con poco stock antes de que se agoten.',
@@ -46,6 +53,7 @@ const sections: Section[] = [
     title: 'Punto de Venta',
     icon: ScanBarcode,
     color: 'text-emerald-400',
+    modulePath: '/dashboard/pos',
     summary: 'Pantalla pensada para el mostrador: escaneás o buscás productos, arma el carrito y cobrás.',
     tips: [
       'El cursor queda siempre listo en el buscador de arriba — solo escaneá el código de barras y se agrega solo.',
@@ -66,6 +74,7 @@ const sections: Section[] = [
     title: 'Productos',
     icon: Package,
     color: 'text-primary',
+    modulePath: '/dashboard/products',
     summary: 'Acá administrás todo tu catálogo: nombre, precio, stock, código de barras e imagen de cada producto.',
     tips: [
       'El botón "Escanear" te deja escanear un código de barras: si ya existe un producto con ese código se abre directo para editarlo, y si es nuevo se abre el alta con el código ya cargado — ideal para no tipear nada a mano.',
@@ -86,6 +95,7 @@ const sections: Section[] = [
     title: 'Ofertas',
     icon: Gift,
     color: 'text-pink-400',
+    modulePath: '/dashboard/offers',
     summary: 'Armá combos de varios productos que se venden juntos a un precio fijo (ej: "Combo Familiar" = 3 gaseosas + 1 papas fritas a $5000).',
     tips: [
       'Un combo necesita al menos 2 unidades en total — pueden ser 2 del mismo producto (ej: "2 Fideos" a un precio promocional) o varios productos distintos combinados.',
@@ -102,6 +112,7 @@ const sections: Section[] = [
     title: 'Clientes',
     icon: Users,
     color: 'text-sky-400',
+    modulePath: '/dashboard/clients',
     summary: 'Base de datos de tus clientes, para asociarlos a ventas y llevar un historial de compras.',
     tips: [
       'Cargar el cliente en una venta te permite después ver en Reportes quiénes son tus mejores compradores.',
@@ -113,6 +124,7 @@ const sections: Section[] = [
     title: 'Ventas',
     icon: ShoppingCart,
     color: 'text-amber-400',
+    modulePath: '/dashboard/sales',
     summary: 'Historial completo de todo lo que se vendió, con fecha, cliente, productos y total.',
     tips: [
       'Usalo para buscar una venta puntual si un cliente reclama un precio o una devolución.',
@@ -124,6 +136,7 @@ const sections: Section[] = [
     title: 'Proveedores',
     icon: Truck,
     color: 'text-violet-400',
+    modulePath: '/dashboard/suppliers',
     summary: 'Listado de tus proveedores (nombre, contacto), para vincularlos a las compras que les hacés.',
     tips: [
       'Cargá un proveedor antes de registrar una compra si querés llevar el historial de a quién le comprás cada cosa.',
@@ -134,6 +147,7 @@ const sections: Section[] = [
     title: 'Compras',
     icon: ClipboardList,
     color: 'text-orange-400',
+    modulePath: '/dashboard/purchases',
     summary: 'Acá registrás la mercadería que ingresa: aumenta el stock de tus productos y queda como gasto en Caja.',
     tips: [
       '"Registrar Compra" es para cargar a mano, producto por producto, con su costo — tiene un campo para escanear el código de barras de la mercadería que llega: si el producto ya existe se agrega solo al pedido, y si es nuevo te pide nombre y precio para crearlo y agregarlo en el mismo paso.',
@@ -148,6 +162,7 @@ const sections: Section[] = [
     title: 'Caja',
     icon: Wallet,
     color: 'text-teal-400',
+    modulePath: '/dashboard/cash-register',
     summary: 'Control de ingresos y egresos de dinero: lo que entra por ventas y lo que sale por compras/gastos.',
     tips: [
       'Es el lugar para chequear que la plata que debería haber, coincida con lo que efectivamente entró y salió.',
@@ -158,6 +173,7 @@ const sections: Section[] = [
     title: 'Gastos',
     icon: DollarSign,
     color: 'text-red-400',
+    modulePath: '/dashboard/expenses',
     summary: 'Para cargar gastos del negocio que no son compra de mercadería (alquiler, servicios, sueldos, etc.).',
     tips: [
       'Cargar los gastos acá es lo que hace que Reportes te muestre la ganancia real, no solo lo vendido.',
@@ -168,6 +184,7 @@ const sections: Section[] = [
     title: 'Reportes',
     icon: BarChart3,
     color: 'text-fuchsia-400',
+    modulePath: '/dashboard/reports',
     summary: 'Gráficos y números que resumen cómo le fue al negocio en un período: ventas, ganancias, productos más vendidos.',
     tips: [
       'Usalo antes de tomar decisiones como subir precios o hacer una promoción — te dice qué productos realmente mueven la aguja.',
@@ -176,13 +193,14 @@ const sections: Section[] = [
   },
   {
     id: 'tienda',
-    title: 'Tienda Online / Configuración',
+    title: 'Tienda Online',
     icon: Store,
     color: 'text-indigo-400',
+    modulePath: '/dashboard/store',
     summary: 'Personalizá cómo se ve tu catálogo público (el link que le mandás a tus clientes): logo, colores, textos e imágenes.',
     tips: [
-      'Tanto acá como en Configuración podés subir el logo y las imágenes de portada directamente desde tu computadora, sin necesitar un link externo.',
-      'Después de guardar cambios, entrá a "Ver Tienda" para chequear que se vea como esperás antes de compartir el link.',
+      'Podés subir el logo y las imágenes directamente desde tu computadora o celular, sin necesitar un link externo.',
+      'Después de guardar cambios, entrá a "Ver Tienda Pública" (desde acá o desde Configuración) para chequear que se vea como esperás antes de compartir el link.',
     ],
   },
   {
@@ -190,6 +208,7 @@ const sections: Section[] = [
     title: 'Usuarios',
     icon: UserCog,
     color: 'text-cyan-400',
+    modulePath: '/dashboard/team',
     summary: 'Solo la ve el Administrador: acá creás logins para tu equipo (empleados) sin compartir tu propia contraseña.',
     tips: [
       'Rol "Administrador": acceso completo, igual que vos.',
@@ -204,7 +223,8 @@ const sections: Section[] = [
     title: 'Configuración',
     icon: Settings,
     color: 'text-slate-400',
-    summary: 'Datos generales del negocio (nombre, moneda, impuesto) y la personalización de la tienda pública.',
+    modulePath: '/dashboard/settings',
+    summary: 'Datos generales del negocio: nombre, moneda, impuesto, turnos e impresión de tickets.',
     tips: [
       'La "URL del Tenant" es el link fijo de tu negocio — no se puede editar porque es la dirección de tu tienda online.',
       'Acá también configurás el horario (desde/hasta) y los nombres de los turnos que usa el reporte "Ventas por Turno" en Reportes.',
@@ -213,7 +233,33 @@ const sections: Section[] = [
 ];
 
 export default function TutorialsPage() {
-  const [openId, setOpenId] = useState<string | null>(sections[0].id);
+  // null means "no explicit choice yet" — defaults to opening the first
+  // section the viewer can actually see, which depends on their plan/role.
+  const [openId, setOpenId] = useState<string | null>(null);
+  // Seeded from the shared cache (see dashboard-layout.tsx) so a repeat visit
+  // filters correctly on its very first render instead of briefly listing
+  // every section — including ones for screens this plan/role can't open —
+  // until a fresh /api/me resolves.
+  const [planName, setPlanName] = useState<string | null>(() => getCachedMe()?.business?.planName ?? null);
+  const [role, setRole] = useState<string | null>(() => getCachedMe()?.role ?? null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/me')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        setCachedMe({ business: data.business, role: data.role });
+        setPlanName(data.business?.planName ?? null);
+        setRole(data.role ?? null);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const visibleSections = sections.filter(
+    (s) => isModuleAllowed(planName, s.modulePath) && isModuleAllowedForRole(role, s.modulePath)
+  );
 
   return (
     <DashboardLayout>
@@ -228,15 +274,17 @@ export default function TutorialsPage() {
       </div>
 
       <div className="space-y-3">
-        {sections.map((section) => {
-          const isOpen = openId === section.id;
+        {visibleSections.map((section) => {
+          // null = no explicit choice yet → default to the first visible
+          // section; '' = the user explicitly collapsed everything.
+          const isOpen = openId === null ? section.id === visibleSections[0]?.id : openId === section.id;
           return (
             <div
               key={section.id}
               className="overflow-hidden rounded-xl border border-border/50 bg-card shadow-lg"
             >
               <button
-                onClick={() => setOpenId(isOpen ? null : section.id)}
+                onClick={() => setOpenId(isOpen ? '' : section.id)}
                 className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-accent/50"
               >
                 <div className="flex items-center gap-3">

@@ -165,13 +165,47 @@ function printViaBrowser(data: TicketData) {
   iframe.contentWindow?.print();
 }
 
+// Set only inside WALTI Desktop's preload (see walti-desktop/src/preload/content.ts) —
+// undefined everywhere else, so `window.waltiDesktop?.notify(...)` below is a
+// no-op in the browser and changes nothing for web users.
+declare global {
+  interface Window {
+    waltiDesktop?: {
+      print: (data: TicketData) => Promise<{ ok: boolean; error?: string }>;
+      notify: (opts: { title: string; body: string }) => void;
+    };
+  }
+}
+
 /**
- * Prints a sale receipt. Tries the local print-agent first for a fully
- * silent print (no dialog); if it's unreachable, falls back to the browser's
- * print dialog so printing still works on machines without the agent set up.
+ * Prints a sale receipt.
+ *
+ * Inside WALTI Desktop (`window.waltiDesktop` set), printing happens
+ * in-process in Electron's main process — see
+ * walti-desktop/src/main/ipc/print.ts — no separate agent/exe needed, since
+ * the desktop app already has full OS/printer access. On the web (no
+ * `window.waltiDesktop`), there's no such access from a browser tab, so it
+ * tries the local print-agent (see /print-agent) instead. Either path falls
+ * back to the browser's print dialog if it fails, so printing still works
+ * even on a machine with nothing extra set up.
  */
 export async function printTicket(data: TicketData) {
+  if (window.waltiDesktop) {
+    const result = await window.waltiDesktop.print(data).catch((error): { ok: false; error: string } => ({
+      ok: false,
+      error: String(error),
+    }));
+    if (result.ok) {
+      window.waltiDesktop.notify({ title: 'Walti', body: 'Ticket impreso correctamente' });
+      return;
+    }
+    printViaBrowser(data);
+    return;
+  }
+
   const printedSilently = await tryPrintViaAgent(data);
-  if (printedSilently) return;
+  if (printedSilently) {
+    return;
+  }
   printViaBrowser(data);
 }

@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { signIn, getSession } from 'next-auth/react';
 import { User, Lock, ArrowRight, Eye, EyeOff, ScanBarcode, Package, BarChart3, Store, UserCog, Sparkles } from 'lucide-react';
 import { startDemo } from '@/lib/demo-mode';
+import { RebrandNotice, hasSeenRebrandNotice, markRebrandNoticeSeen } from '@/components/auth/rebrand-notice';
 
 const PITCH_POINTS = [
   { icon: ScanBarcode, text: 'Punto de Venta rápido: escaneás o buscás y cobrás en segundos.' },
@@ -19,12 +20,35 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showRebrandNotice, setShowRebrandNotice] = useState(false);
 
   useEffect(() => {
     if (router.query.reason === 'expired' || router.query.reason === 'timeout') {
       setError('Tu sesión expiró. Volvé a iniciar sesión.');
     }
   }, [router.query.reason]);
+
+  // No-op on the web product (the route 404s there) — only WALTI Desktop's
+  // first run ever has `needsSetup: true`.
+  useEffect(() => {
+    fetch('/api/setup/init')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.needsSetup) router.replace('/setup');
+      })
+      .catch(() => {});
+  }, [router]);
+
+  // Starts closed (matches SSR) and only pops open after mount, once we can
+  // actually read localStorage — same reasoning as the demo banner dismiss.
+  useEffect(() => {
+    if (!hasSeenRebrandNotice()) setShowRebrandNotice(true);
+  }, []);
+
+  const closeRebrandNotice = () => {
+    setShowRebrandNotice(false);
+    markRebrandNoticeSeen();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,10 +131,17 @@ export default function LoginPage() {
 
         {/* Login card */}
         <div className="w-full max-w-md animate-slide-up lg:flex lg:flex-col lg:justify-center">
-          <div className="mb-6 flex justify-center">
+          <div className="mb-2 flex justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-login.png" alt="Walti" className="h-auto w-40 sm:w-48" />
           </div>
+          <button
+            onClick={() => setShowRebrandNotice(true)}
+            className="mx-auto mb-4 flex items-center gap-1 text-xs font-medium text-secondary hover:underline"
+          >
+            <Sparkles className="h-3 w-3" />
+            ¿Qué cambió?
+          </button>
           <div className="glass rounded-2xl p-6 sm:p-8">
             <h2 className="mb-6 text-xl font-semibold">Iniciar sesión</h2>
 
@@ -177,6 +208,8 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
+      <RebrandNotice open={showRebrandNotice} onClose={closeRebrandNotice} />
     </div>
   );
 }

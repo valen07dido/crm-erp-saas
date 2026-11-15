@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import cloudinary from '@/lib/cloudinary';
+import { requireBusinessMembership } from '@/lib/server/auth-guard';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const businessId = req.headers['x-business-id'];
@@ -10,6 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+  if (!(await requireBusinessMembership(req, res, businessId))) return;
 
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   const apiKey = process.env.CLOUDINARY_API_KEY;

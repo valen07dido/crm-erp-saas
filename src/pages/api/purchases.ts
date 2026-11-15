@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import prisma from '@/lib/prisma';
+import { getDataSource } from '@/lib/datasource';
+import { requireModule } from '@/lib/server/plan-guard';
+import { requireBusinessMembership } from '@/lib/server/auth-guard';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const businessId = req.headers['x-business-id'] as string;
@@ -7,19 +9,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!businessId) {
     return res.status(401).json({ error: 'Missing business ID' });
   }
+  if (!(await requireBusinessMembership(req, res, businessId))) return;
+  if (!(await requireModule(businessId, '/dashboard/purchases', res))) return;
+
+  const dataSource = await getDataSource();
 
   if (req.method === 'GET') {
     try {
-      const purchases = await prisma.purchase.findMany({
-        where: { businessId },
-        include: {
-          supplier: true,
-          items: {
-            include: { product: true },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
+      const purchases = await dataSource.purchases.list(businessId);
       return res.status(200).json(purchases);
     } catch (error) {
       return res.status(500).json({ error: 'Error fetching purchases' });
@@ -29,67 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'POST') {
     try {
       const { supplierId, items, status } = req.body;
-      
-      let total = 0;
-      
-      const purchase = await prisma.$transaction(async (tx) => {
-        const newPurchase = await tx.purchase.create({
-          data: {
-            businessId,
-            supplierId,
-            status: status || 'COMPLETED',
-            total: 0, 
-          },
-        });
-
-        for (const item of items) {
-          const product = await tx.product.findUnique({ where: { id: item.productId } });
-          if (!product) throw new Error(`Product not found: ${item.productId}`);
-
-          // In purchases, price might be the cost price from supplier. We'll use the provided price or default to product price
-          const itemPrice = item.price ? Number(item.price) : Number(product.price);
-          const itemTotal = itemPrice * item.quantity;
-          total += itemTotal;
-
-          await tx.purchaseItem.create({
-            data: {
-              purchaseId: newPurchase.id,
-              productId: item.productId,
-              quantity: item.quantity,
-              price: itemPrice,
-            },
-          });
-
-          // Increment stock
-          await tx.product.update({
-            where: { id: item.productId },
-            data: { stock: { increment: item.quantity } },
-          });
-        }
-
-        const updatedPurchase = await tx.purchase.update({
-          where: { id: newPurchase.id },
-          data: { total },
-          include: {
-            supplier: true,
-            items: { include: { product: true } },
-          },
-        });
-
-        // Create financial transaction
-        await tx.transaction.create({
-          data: {
-            businessId,
-            type: 'EXPENSE',
-            amount: total,
-            description: `Compra #${updatedPurchase.id.slice(0, 8)}`,
-            category: 'Compras a Proveedores',
-          }
-        });
-
-        return updatedPurchase;
-      });
-
+      const purchase = await dataSource.purchases.create({ businessId, supplierId: supplierId ?? null, status, items });
       return res.status(201).json(purchase);
     } catch (error: any) {
       console.error(error);

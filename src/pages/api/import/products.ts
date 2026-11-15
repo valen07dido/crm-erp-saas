@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
+import { requireBusinessMembership } from '@/lib/server/auth-guard';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -11,6 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!businessId || typeof businessId !== 'string') {
     return res.status(400).json({ error: 'Missing x-business-id header' });
   }
+  if (!(await requireBusinessMembership(req, res, businessId))) return;
 
   try {
     const { products } = req.body;
