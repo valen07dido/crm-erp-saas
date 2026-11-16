@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           currency, taxRate,
           shiftMorningStartHour, shiftMorningEndHour, shiftNightStartHour, shiftNightEndHour,
           shiftMorningLabel, shiftNightLabel,
-          ticketWidthMm, printTicketOnSale,
+          ticketWidthMm, printTicketOnSale, printLeftOffsetMm,
         } = req.body as {
           currency?: string;
           taxRate?: number;
@@ -34,6 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           shiftNightLabel?: string;
           ticketWidthMm?: number;
           printTicketOnSale?: boolean;
+          printLeftOffsetMm?: number;
         };
         const settings = await dataSource.businessSettings.update(businessId, {
           currency,
@@ -46,6 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           shiftNightLabel,
           ticketWidthMm,
           printTicketOnSale,
+          printLeftOffsetMm,
         });
         return res.status(200).json(settings);
       }

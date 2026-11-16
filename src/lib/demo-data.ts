@@ -153,6 +153,7 @@ export interface DemoDb {
     shiftNightLabel: string;
     ticketWidthMm: number;
     printTicketOnSale: boolean;
+    printLeftOffsetMm: number;
   };
   storefront: {
     id: string;
@@ -426,6 +427,7 @@ export function createDemoSeed(): DemoDb {
       shiftNightLabel: 'Turno Noche',
       ticketWidthMm: 58,
       printTicketOnSale: false,
+      printLeftOffsetMm: 0,
     },
     storefront: {
       id: id('storefront'),

@@ -78,6 +78,7 @@ function mapBusinessSettings(s: any): BusinessSettingsRecord {
     shiftNightLabel: s.shiftNightLabel,
     ticketWidthMm: s.ticketWidthMm,
     printTicketOnSale: s.printTicketOnSale,
+    printLeftOffsetMm: Number(s.printLeftOffsetMm),
   };
 }
 
@@ -686,7 +687,9 @@ export const prismaDataSource: DataSource = {
         shiftNightLabel,
         ticketWidthMm,
         printTicketOnSale,
+        printLeftOffsetMm,
       } = input;
+      const clampOffset = (v: number) => Math.min(30, Math.max(0, v));
       const row = await prisma.businessSettings.upsert({
         where: { businessId },
         update: {
@@ -700,6 +703,7 @@ export const prismaDataSource: DataSource = {
           ...(shiftNightLabel !== undefined && { shiftNightLabel }),
           ...(ticketWidthMm !== undefined && { ticketWidthMm: Math.min(300, Math.max(30, ticketWidthMm)) }),
           ...(printTicketOnSale !== undefined && { printTicketOnSale }),
+          ...(printLeftOffsetMm !== undefined && { printLeftOffsetMm: clampOffset(printLeftOffsetMm) }),
         },
         create: {
           businessId,
@@ -713,6 +717,7 @@ export const prismaDataSource: DataSource = {
           shiftNightLabel: shiftNightLabel ?? 'Turno Noche',
           ticketWidthMm: ticketWidthMm ?? 58,
           printTicketOnSale: printTicketOnSale ?? false,
+          printLeftOffsetMm: printLeftOffsetMm !== undefined ? clampOffset(printLeftOffsetMm) : 0,
         },
       });
       return mapBusinessSettings(row);

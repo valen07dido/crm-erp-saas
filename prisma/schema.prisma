@@ -130,6 +130,13 @@ model BusinessSettings {
   // Receipt/ticket printing (thermal printer paper width in mm — 58 or 80 are common)
   ticketWidthMm     Int     @default(58)
   printTicketOnSale Boolean @default(false)
+  // Some thermal printer drivers always print shifted right by a fixed
+  // physical amount regardless of what margins the PDF requests — a
+  // per-printer hardware/driver quirk, measured once on a real test ticket
+  // and compensated for as extra right margin (see
+  // walti-desktop/src/main/print/ticket-pdf.ts). Editable from Configuración
+  // so recalibrating a printer doesn't require rebuilding the installer.
+  printLeftOffsetMm Float   @default(0)
 }
 
 model BusinessUser {

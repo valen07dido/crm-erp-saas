@@ -24,6 +24,7 @@ export default function SettingsPage() {
   const [shiftNightLabel, setShiftNightLabel] = useState('Turno Noche');
   const [ticketWidthMm, setTicketWidthMm] = useState('58');
   const [printTicketOnSale, setPrintTicketOnSale] = useState(false);
+  const [printLeftOffsetMm, setPrintLeftOffsetMm] = useState('0');
 
   useEffect(() => {
     const init = async () => {
@@ -51,6 +52,7 @@ export default function SettingsPage() {
             setShiftNightLabel(bsData.shiftNightLabel || 'Turno Noche');
             setTicketWidthMm(String(bsData.ticketWidthMm ?? 58));
             setPrintTicketOnSale(bsData.printTicketOnSale ?? false);
+            setPrintLeftOffsetMm(String(bsData.printLeftOffsetMm ?? 0));
           }
         }
       } catch (e) {
@@ -81,6 +83,7 @@ export default function SettingsPage() {
           shiftNightLabel,
           ticketWidthMm: parseInt(ticketWidthMm, 10) || 58,
           printTicketOnSale,
+          printLeftOffsetMm: parseFloat(printLeftOffsetMm) || 0,
         }),
       });
       toastSuccess('Configuración guardada exitosamente');
@@ -288,6 +291,23 @@ export default function SettingsPage() {
                           />
                           <span className="text-sm font-medium">Imprimir automáticamente al cerrar una venta</span>
                         </label>
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium">Corrimiento de impresión (mm)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="30"
+                          step="0.5"
+                          value={printLeftOffsetMm}
+                          onChange={(e) => setPrintLeftOffsetMm(e.target.value)}
+                          className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:ring-2 focus:ring-ring"
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Algunas impresoras térmicas siempre imprimen corridas hacia la derecha un margen fijo. Si el
+                          ticket sale cortado en el borde derecho (y el ancho de papel ya es el correcto), subí este
+                          valor de a poco e imprimí un ticket de prueba hasta que entre completo.
+                        </p>
                       </div>
                     </div>
                   </div>

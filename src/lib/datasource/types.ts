@@ -202,6 +202,7 @@ export interface BusinessSettingsRecord {
   shiftNightLabel: string;
   ticketWidthMm: number;
   printTicketOnSale: boolean;
+  printLeftOffsetMm: number;
 }
 
 export interface BusinessSettingsUpdateInput {
@@ -215,6 +216,7 @@ export interface BusinessSettingsUpdateInput {
   shiftNightLabel?: string;
   ticketWidthMm?: number;
   printTicketOnSale?: boolean;
+  printLeftOffsetMm?: number;
 }
 
 export interface StatsSummary {

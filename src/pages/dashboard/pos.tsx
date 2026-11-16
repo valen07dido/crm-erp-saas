@@ -154,6 +154,7 @@ export default function POSPage() {
   // Receipt printing config
   const [businessName, setBusinessName] = useState('');
   const [ticketWidthMm, setTicketWidthMm] = useState(58);
+  const [printLeftOffsetMm, setPrintLeftOffsetMm] = useState(0);
   const [printTicketOnSale, setPrintTicketOnSale] = useState(false);
   const [printThisSale, setPrintThisSale] = useState(false);
 
@@ -208,6 +209,7 @@ export default function POSPage() {
         if (settingsRes.ok) {
           const settings = await settingsRes.json();
           setTicketWidthMm(settings.ticketWidthMm ?? 58);
+          setPrintLeftOffsetMm(settings.printLeftOffsetMm ?? 0);
           setPrintTicketOnSale(settings.printTicketOnSale ?? false);
           setPrintThisSale(settings.printTicketOnSale ?? false);
         }
@@ -531,6 +533,7 @@ export default function POSPage() {
       const ticket: TicketData = {
         businessName: businessName || 'Mi Negocio',
         widthMm: ticketWidthMm,
+        leftOffsetMm: printLeftOffsetMm,
         saleId: sale.id,
         date: new Date(),
         items: cart.map(i => ({ name: i.name, quantity: i.quantity, price: i.price, soldByWeight: i.soldByWeight })),

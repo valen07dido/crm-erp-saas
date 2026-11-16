@@ -16,6 +16,11 @@ export interface TicketData {
   cashReceived?: number;
   change?: number;
   clientName?: string;
+  // Compensates a per-printer hardware/driver quirk (some thermal printers
+  // always shift the print a fixed amount to the right) — only consumed by
+  // WALTI Desktop's native print path (walti-desktop/src/main/print/ticket-pdf.ts).
+  // Comes from business-settings' printLeftOffsetMm; 0 if unset.
+  leftOffsetMm?: number;
 }
 
 const PAYMENT_LABELS: Record<string, string> = {

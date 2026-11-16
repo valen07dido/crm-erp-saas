@@ -803,6 +803,7 @@ async function handleRequest(pathname: string, search: URLSearchParams, method: 
       if (body.shiftNightLabel !== undefined) s.shiftNightLabel = body.shiftNightLabel;
       if (body.ticketWidthMm !== undefined) s.ticketWidthMm = Math.min(300, Math.max(30, body.ticketWidthMm));
       if (body.printTicketOnSale !== undefined) s.printTicketOnSale = body.printTicketOnSale;
+      if (body.printLeftOffsetMm !== undefined) s.printLeftOffsetMm = Math.min(30, Math.max(0, body.printLeftOffsetMm));
       saveDb(db);
       return json(s);
     }

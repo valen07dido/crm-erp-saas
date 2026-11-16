@@ -15,6 +15,7 @@ interface BusinessSettingsRow {
   shift_night_label: string;
   ticket_width_mm: number;
   print_ticket_on_sale: number;
+  print_left_offset_mm: number;
 }
 
 function mapRow(row: BusinessSettingsRow): BusinessSettingsRecord {
@@ -31,6 +32,7 @@ function mapRow(row: BusinessSettingsRow): BusinessSettingsRecord {
     shiftNightLabel: row.shift_night_label,
     ticketWidthMm: row.ticket_width_mm,
     printTicketOnSale: !!row.print_ticket_on_sale,
+    printLeftOffsetMm: row.print_left_offset_mm,
   };
 }
 
@@ -39,6 +41,9 @@ function clampHour(h: number): number {
 }
 function clampTaxRate(t: number): number {
   return Math.min(100, Math.max(0, t));
+}
+function clampOffset(v: number): number {
+  return Math.min(30, Math.max(0, v));
 }
 
 function findOrCreate(businessId: string): BusinessSettingsRow {
@@ -84,6 +89,8 @@ export const businessSettingsRepository = {
         input.ticketWidthMm !== undefined ? Math.min(300, Math.max(30, input.ticketWidthMm)) : existing.ticket_width_mm,
       printTicketOnSale:
         input.printTicketOnSale !== undefined ? (input.printTicketOnSale ? 1 : 0) : existing.print_ticket_on_sale,
+      printLeftOffsetMm:
+        input.printLeftOffsetMm !== undefined ? clampOffset(input.printLeftOffsetMm) : existing.print_left_offset_mm,
     };
 
     db.prepare(
@@ -91,7 +98,7 @@ export const businessSettingsRepository = {
         shift_morning_start_hour=@shiftMorningStartHour, shift_morning_end_hour=@shiftMorningEndHour,
         shift_night_start_hour=@shiftNightStartHour, shift_night_end_hour=@shiftNightEndHour,
         shift_morning_label=@shiftMorningLabel, shift_night_label=@shiftNightLabel,
-        ticket_width_mm=@ticketWidthMm, print_ticket_on_sale=@printTicketOnSale
+        ticket_width_mm=@ticketWidthMm, print_ticket_on_sale=@printTicketOnSale, print_left_offset_mm=@printLeftOffsetMm
        WHERE business_id = @businessId`
     ).run({ ...next, businessId });
 
