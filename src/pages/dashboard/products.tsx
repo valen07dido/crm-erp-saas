@@ -44,6 +44,18 @@ function daysUntil(dateStr: string): number {
   return Math.round(diffMs / (1000 * 60 * 60 * 24));
 }
 
+// Typing a 2-digit year (e.g. "27" for 2027) into the native date input and
+// tabbing away before completing all 4 digits gets zero-padded to a literal
+// year like "0027" instead of rejected — silently off by ~2000 years. `min`
+// on the input stops most of that at the picker level; this re-checks on
+// submit in case a value slipped through typed input anyway.
+const MIN_EXPIRATION_YEAR = 2000;
+const MAX_EXPIRATION_YEAR = new Date().getFullYear() + 50;
+function isValidExpirationDate(value: string): boolean {
+  const year = new Date(value).getFullYear();
+  return Number.isFinite(year) && year >= MIN_EXPIRATION_YEAR && year <= MAX_EXPIRATION_YEAR;
+}
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,6 +164,10 @@ export default function ProductsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!businessId) return;
+    if (form.expirationDate && !isValidExpirationDate(form.expirationDate)) {
+      alertMessage(`Fecha de vencimiento inválida: revisá el año (debe estar entre ${MIN_EXPIRATION_YEAR} y ${MAX_EXPIRATION_YEAR})`, 'warning');
+      return;
+    }
     setSaving(true);
     try {
       const rawStock = parseFloat(form.stock) || 0;
@@ -168,24 +184,29 @@ export default function ProductsPage() {
         soldByWeight: form.soldByWeight,
       };
 
-      if (editingProduct) {
-        await fetch(`/api/products?id=${editingProduct.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
-          body: JSON.stringify(payload),
-        });
-      } else {
-        await fetch('/api/products', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
-          body: JSON.stringify(payload),
-        });
+      const res = editingProduct
+        ? await fetch(`/api/products?id=${editingProduct.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
+            body: JSON.stringify(payload),
+          })
+        : await fetch('/api/products', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
+            body: JSON.stringify(payload),
+          });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        alertMessage(data?.error || 'Error al guardar el producto');
+        return;
       }
 
       setShowModal(false);
       fetchProducts(businessId);
     } catch (e) {
       console.error('Error saving product', e);
+      alertMessage('Error de conexión al guardar el producto');
     } finally {
       setSaving(false);
     }
@@ -925,6 +946,8 @@ export default function ProductsPage() {
                       type="date"
                       value={form.expirationDate}
                       onChange={(e) => setForm({ ...form, expirationDate: e.target.value })}
+                      min={`${MIN_EXPIRATION_YEAR}-01-01`}
+                      max={`${MAX_EXPIRATION_YEAR}-12-31`}
                       className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring hover:border-primary/30"
                     />
                   </div>

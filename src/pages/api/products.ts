@@ -18,6 +18,20 @@ function sanitizeStock(stock: number, soldByWeight: boolean): number {
 function sanitizePrice(price: number): number {
   return Math.max(0, Number(price) || 0);
 }
+
+// Guards against the native <input type="date"> year quirk: typing a
+// 2-digit year (e.g. "27" meaning 2027) and tabbing away before completing
+// all 4 digits gets zero-padded to a literal year like "0027" instead of
+// rejected — silently saving a date ~2000 years off instead of the
+// intended one. Any year clearly outside a product's real shelf life is
+// rejected rather than stored.
+const MIN_EXPIRATION_YEAR = 2000;
+const MAX_EXPIRATION_YEAR = new Date().getFullYear() + 50;
+function isValidExpirationDate(value: string): boolean {
+  const year = new Date(value).getFullYear();
+  return Number.isFinite(year) && year >= MIN_EXPIRATION_YEAR && year <= MAX_EXPIRATION_YEAR;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const businessId = req.headers['x-business-id'];
   if (!businessId || typeof businessId !== 'string') {
@@ -47,6 +61,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         };
         if (!name) {
           return res.status(400).json({ error: 'Product name is required' });
+        }
+        if (expirationDate && !isValidExpirationDate(expirationDate)) {
+          return res.status(400).json({ error: `Fecha de vencimiento inválida: el año debe estar entre ${MIN_EXPIRATION_YEAR} y ${MAX_EXPIRATION_YEAR}` });
         }
         const product = await dataSource.products.create({
           businessId,
@@ -78,6 +95,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           soldByWeight: boolean;
         }>;
         const { expirationDate, price, stock, soldByWeight, ...rest } = body;
+        if (expirationDate && !isValidExpirationDate(expirationDate)) {
+          return res.status(400).json({ error: `Fecha de vencimiento inválida: el año debe estar entre ${MIN_EXPIRATION_YEAR} y ${MAX_EXPIRATION_YEAR}` });
+        }
         // id alone isn't enough to scope this write — it's a bare UUID with
         // no tenant check, so without `businessId` here too, knowing/leaking
         // any product id would let you edit a DIFFERENT business's product.
