@@ -3,6 +3,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { ImageUploadField } from '@/components/ui/image-upload-field';
 import { BarcodeScanField } from '@/components/ui/barcode-scan-field';
 import { alertMessage, toastSuccess, confirmAction } from '@/lib/alerts';
+import { MIN_EXPIRATION_YEAR, MAX_EXPIRATION_YEAR, isValidExpirationDate } from '@/lib/validateExpirationDate';
 import {
   Package,
   Plus,
@@ -44,17 +45,6 @@ function daysUntil(dateStr: string): number {
   return Math.round(diffMs / (1000 * 60 * 60 * 24));
 }
 
-// Typing a 2-digit year (e.g. "27" for 2027) into the native date input and
-// tabbing away before completing all 4 digits gets zero-padded to a literal
-// year like "0027" instead of rejected — silently off by ~2000 years. `min`
-// on the input stops most of that at the picker level; this re-checks on
-// submit in case a value slipped through typed input anyway.
-const MIN_EXPIRATION_YEAR = 2000;
-const MAX_EXPIRATION_YEAR = new Date().getFullYear() + 50;
-function isValidExpirationDate(value: string): boolean {
-  const year = new Date(value).getFullYear();
-  return Number.isFinite(year) && year >= MIN_EXPIRATION_YEAR && year <= MAX_EXPIRATION_YEAR;
-}
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -186,15 +176,15 @@ export default function ProductsPage() {
 
       const res = editingProduct
         ? await fetch(`/api/products?id=${editingProduct.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
-            body: JSON.stringify(payload),
-          })
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
+          body: JSON.stringify(payload),
+        })
         : await fetch('/api/products', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
-            body: JSON.stringify(payload),
-          });
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-business-id': businessId },
+          body: JSON.stringify(payload),
+        });
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -551,115 +541,114 @@ export default function ProductsPage() {
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-border/50 bg-card shadow-lg">
         <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border/50 bg-muted/30">
-              <th className="px-6 py-4 text-left font-medium text-muted-foreground">Producto</th>
-              <th className="px-6 py-4 text-left font-medium text-muted-foreground">Descripción</th>
-              <th className="px-6 py-4 text-right font-medium text-muted-foreground">Precio</th>
-              <th className="px-6 py-4 text-right font-medium text-muted-foreground">Stock</th>
-              <th className="px-6 py-4 text-right font-medium text-muted-foreground">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-16 text-center text-muted-foreground">
-                  <div className="flex flex-col items-center">
-                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                    <p className="mt-3 text-sm">Cargando productos...</p>
-                  </div>
-                </td>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border/50 bg-muted/30">
+                <th className="px-6 py-4 text-left font-medium text-muted-foreground">Producto</th>
+                <th className="px-6 py-4 text-left font-medium text-muted-foreground">Descripción</th>
+                <th className="px-6 py-4 text-right font-medium text-muted-foreground">Precio</th>
+                <th className="px-6 py-4 text-right font-medium text-muted-foreground">Stock</th>
+                <th className="px-6 py-4 text-right font-medium text-muted-foreground">Acciones</th>
               </tr>
-            ) : filteredProducts.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-16 text-center text-muted-foreground">
-                  <div className="flex flex-col items-center">
-                    <Package className="mb-3 h-12 w-12 opacity-30" />
-                    <p className="text-sm">
-                      {products.length === 0 ? 'No hay productos registrados' : 'Ningún producto coincide con la búsqueda/filtros'}
-                    </p>
-                    <p className="text-xs">
-                      {products.length === 0 ? 'Haz clic en "Nuevo producto" para agregar uno' : 'Probá con otros términos o limpiá los filtros'}
-                    </p>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              paginatedProducts.map((product, i) => (
-                <tr
-                  key={product.id}
-                  className="border-b border-border/30 transition-colors hover:bg-muted/20 animate-fade-in"
-                  style={{ animationDelay: `${i * 50}ms` }}
-                >
-                  <td className="px-6 py-4">
-                    <div className="font-medium flex items-center gap-1.5">
-                      {product.name}
-                      {product.soldByWeight && (
-                        <span title="Se vende por peso">
-                          <Scale className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        </span>
-                      )}
-                    </div>
-                    {product.barcode && (
-                      <div className="mt-0.5 font-mono text-xs text-muted-foreground">{product.barcode}</div>
-                    )}
-                    {product.expirationDate && (() => {
-                      const days = daysUntil(product.expirationDate);
-                      if (days > DAYS_UNTIL_EXPIRY_WARNING) return null;
-                      return (
-                        <div className={`mt-1 flex items-center gap-1 text-xs font-medium ${days < 0 ? 'text-red-400' : 'text-amber-400'}`}>
-                          <CalendarClock className="h-3 w-3" />
-                          {days < 0
-                            ? `Vencido hace ${Math.abs(days)} día${Math.abs(days) === 1 ? '' : 's'}`
-                            : days === 0
-                            ? 'Vence hoy'
-                            : `Vence en ${days} día${days === 1 ? '' : 's'}`}
-                        </div>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-6 py-4 text-muted-foreground">{product.description || '—'}</td>
-                  <td className="px-6 py-4 text-right font-mono">
-                    ${Number(product.price).toFixed(2)}{product.soldByWeight && <span className="text-xs text-muted-foreground">/kg</span>}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        Number(product.stock) <= 5
-                          ? 'bg-red-500/15 text-red-400'
-                          : Number(product.stock) <= 20
-                          ? 'bg-amber-500/15 text-amber-400'
-                          : 'bg-emerald-500/15 text-emerald-400'
-                      }`}
-                    >
-                      {Number(product.stock) <= 5 && <AlertCircle className="h-3 w-3" />}
-                      {product.soldByWeight
-                        ? `${Number(product.stock).toLocaleString('es-AR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg`
-                        : Number(product.stock)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => openEditModal(product)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent"
-                      >
-                        <Edit3 className="h-4 w-4 text-muted-foreground" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(product.id)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4 text-red-400" />
-                      </button>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-16 text-center text-muted-foreground">
+                    <div className="flex flex-col items-center">
+                      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                      <p className="mt-3 text-sm">Cargando productos...</p>
                     </div>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-16 text-center text-muted-foreground">
+                    <div className="flex flex-col items-center">
+                      <Package className="mb-3 h-12 w-12 opacity-30" />
+                      <p className="text-sm">
+                        {products.length === 0 ? 'No hay productos registrados' : 'Ningún producto coincide con la búsqueda/filtros'}
+                      </p>
+                      <p className="text-xs">
+                        {products.length === 0 ? 'Haz clic en "Nuevo producto" para agregar uno' : 'Probá con otros términos o limpiá los filtros'}
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                paginatedProducts.map((product, i) => (
+                  <tr
+                    key={product.id}
+                    className="border-b border-border/30 transition-colors hover:bg-muted/20 animate-fade-in"
+                    style={{ animationDelay: `${i * 50}ms` }}
+                  >
+                    <td className="px-6 py-4">
+                      <div className="font-medium flex items-center gap-1.5">
+                        {product.name}
+                        {product.soldByWeight && (
+                          <span title="Se vende por peso">
+                            <Scale className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          </span>
+                        )}
+                      </div>
+                      {product.barcode && (
+                        <div className="mt-0.5 font-mono text-xs text-muted-foreground">{product.barcode}</div>
+                      )}
+                      {product.expirationDate && (() => {
+                        const days = daysUntil(product.expirationDate);
+                        if (days > DAYS_UNTIL_EXPIRY_WARNING) return null;
+                        return (
+                          <div className={`mt-1 flex items-center gap-1 text-xs font-medium ${days < 0 ? 'text-red-400' : 'text-amber-400'}`}>
+                            <CalendarClock className="h-3 w-3" />
+                            {days < 0
+                              ? `Vencido hace ${Math.abs(days)} día${Math.abs(days) === 1 ? '' : 's'}`
+                              : days === 0
+                                ? 'Vence hoy'
+                                : `Vence en ${days} día${days === 1 ? '' : 's'}`}
+                          </div>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-6 py-4 text-muted-foreground">{product.description || '—'}</td>
+                    <td className="px-6 py-4 text-right font-mono">
+                      ${Number(product.price).toFixed(2)}{product.soldByWeight && <span className="text-xs text-muted-foreground">/kg</span>}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${Number(product.stock) <= 5
+                            ? 'bg-red-500/15 text-red-400'
+                            : Number(product.stock) <= 20
+                              ? 'bg-amber-500/15 text-amber-400'
+                              : 'bg-emerald-500/15 text-emerald-400'
+                          }`}
+                      >
+                        {Number(product.stock) <= 5 && <AlertCircle className="h-3 w-3" />}
+                        {product.soldByWeight
+                          ? `${Number(product.stock).toLocaleString('es-AR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg`
+                          : Number(product.stock)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEditModal(product)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent"
+                        >
+                          <Edit3 className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(product.id)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-400" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
         {!loading && filteredProducts.length > 0 && (
           <div className="flex flex-col gap-3 border-t border-border/50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1006,7 +995,7 @@ export default function ProductsPage() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            
+
             <div className="space-y-6">
               <div className="rounded-xl border border-border/50 bg-muted/30 p-4">
                 <h3 className="font-semibold text-sm mb-2">1. Descarga la plantilla</h3>

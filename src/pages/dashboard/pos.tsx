@@ -29,7 +29,7 @@ import { alertMessage, toastSuccess } from '@/lib/alerts';
 import { printTicket, TicketData } from '@/lib/printTicket';
 import { CameraScanButton } from '@/components/ui/camera-scan-button';
 import { isModuleAllowed } from '@/lib/plans';
-
+import { MIN_EXPIRATION_YEAR, MAX_EXPIRATION_YEAR, isValidExpirationDate } from '@/lib/validateExpirationDate';
 interface Product {
   id: string;
   name: string;
@@ -371,6 +371,10 @@ export default function POSPage() {
   const handleQuickCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!businessId || !quickCreateCode) return;
+    if (quickCreateForm.expirationDate && !isValidExpirationDate(quickCreateForm.expirationDate)) {
+      alertMessage(`Fecha de vencimiento inválida: revisá el año (debe estar entre ${MIN_EXPIRATION_YEAR} y ${MAX_EXPIRATION_YEAR})`, 'warning');
+      return;
+    }
     setQuickCreateSaving(true);
     try {
       const rawStock = parseFloat(quickCreateForm.stock) || 0;
@@ -417,7 +421,8 @@ export default function POSPage() {
           toastSuccess(`${newProduct.name} creado y agregado a la venta`);
         }
       } else {
-        alertMessage('Error al crear el producto');
+        const data = await res.json().catch(() => null);
+        alertMessage(data?.error || 'Error al crear el producto');
       }
     } catch (err) {
       console.error('Error quick-creating product', err);
@@ -587,10 +592,10 @@ export default function POSPage() {
   // Filtered sellables for price check (out-of-stock items are still valid to look up)
   const priceCheckFiltered = priceCheckQuery.trim()
     ? sellables.filter(s =>
-        s.name.toLowerCase().includes(priceCheckQuery.toLowerCase()) ||
-        (s.barcode || '').toLowerCase().includes(priceCheckQuery.toLowerCase()) ||
-        (s.description || '').toLowerCase().includes(priceCheckQuery.toLowerCase())
-      )
+      s.name.toLowerCase().includes(priceCheckQuery.toLowerCase()) ||
+      (s.barcode || '').toLowerCase().includes(priceCheckQuery.toLowerCase()) ||
+      (s.description || '').toLowerCase().includes(priceCheckQuery.toLowerCase())
+    )
     : [];
 
   if (loading) {
@@ -681,19 +686,17 @@ export default function POSPage() {
                 <button
                   key={i}
                   onClick={() => switchSlot(i)}
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl border-2 py-2.5 text-sm font-semibold transition-all ${
-                    isActive
-                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
-                      : count > 0
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl border-2 py-2.5 text-sm font-semibold transition-all ${isActive
+                    ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
+                    : count > 0
                       ? 'border-amber-500/40 bg-amber-500/5 text-amber-400 hover:border-amber-500/60'
                       : 'border-border text-muted-foreground hover:border-emerald-500/30'
-                  }`}
+                    }`}
                 >
                   Venta {i + 1}
                   {count > 0 && (
-                    <span className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold text-white ${
-                      isActive ? 'bg-emerald-500' : 'bg-amber-500'
-                    }`}>
+                    <span className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold text-white ${isActive ? 'bg-emerald-500' : 'bg-amber-500'
+                      }`}>
                       {count}
                     </span>
                   )}
@@ -957,13 +960,12 @@ export default function POSPage() {
                       <p className="text-xs text-muted-foreground font-mono mt-0.5">{priceCheckSelected.barcode}</p>
                     )}
                     <span
-                      className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        priceCheckSelected.stock <= 5
-                          ? 'bg-red-500/15 text-red-400'
-                          : priceCheckSelected.stock <= 20
+                      className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${priceCheckSelected.stock <= 5
+                        ? 'bg-red-500/15 text-red-400'
+                        : priceCheckSelected.stock <= 20
                           ? 'bg-amber-500/15 text-amber-400'
                           : 'bg-emerald-500/15 text-emerald-400'
-                      }`}
+                        }`}
                     >
                       {priceCheckSelected.stock <= 5 && <AlertCircle className="h-3 w-3" />}
                       Stock: {priceCheckSelected.stock}
@@ -1158,6 +1160,8 @@ export default function POSPage() {
                   type="date"
                   value={quickCreateForm.expirationDate}
                   onChange={(e) => setQuickCreateForm({ ...quickCreateForm, expirationDate: e.target.value })}
+                  min={`${MIN_EXPIRATION_YEAR}-01-01`}
+                  max={`${MAX_EXPIRATION_YEAR}-12-31`}
                   className="h-10 w-full rounded-lg border border-input bg-background/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
@@ -1203,11 +1207,10 @@ export default function POSPage() {
                 <button
                   key={m.key}
                   onClick={() => setPaymentMethod(m.key)}
-                  className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-sm font-medium transition-all ${
-                    paymentMethod === m.key
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border hover:border-primary/30'
-                  }`}
+                  className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-sm font-medium transition-all ${paymentMethod === m.key
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border hover:border-primary/30'
+                    }`}
                 >
                   <m.icon className="h-6 w-6" />
                   {m.label}
