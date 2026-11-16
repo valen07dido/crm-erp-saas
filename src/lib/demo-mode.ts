@@ -188,18 +188,44 @@ async function handleRequest(pathname: string, search: URLSearchParams, method: 
   }
 
   // --- /api/stats ---
+  // Mirrors prisma-datasource.ts's stats.get() field-for-field — the
+  // dashboard (src/pages/dashboard/index.tsx) destructures all of these and
+  // .map()s several of them with no fallback, so a mock response missing any
+  // one of them crashes the whole page with a client-side exception the
+  // moment "Probar Walti" lands on /dashboard. Keep this in sync with that
+  // file if its stats shape ever changes again.
   if (pathname === '/api/stats') {
     if (!hasBusinessIdHeader(init)) return errorJson('Missing x-business-id header', 400);
-    const todayStr = new Date().toDateString();
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    const income = db.transactions.filter((t) => t.type === 'INCOME');
-    const salesToday = income.filter((t) => new Date(t.date).toDateString() === todayStr).reduce((s, t) => s + Number(t.amount), 0);
-    const salesMonth = income.filter((t) => new Date(t.date) >= monthStart).reduce((s, t) => s + Number(t.amount), 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const firstDayOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const SERIES_DAYS = 14;
+    const seriesStart = new Date(today);
+    seriesStart.setDate(seriesStart.getDate() - (SERIES_DAYS - 1));
+
+    const notCancelled = db.sales.filter((s) => s.status !== 'CANCELLED');
+    const sumInRange = (from: Date, to?: Date) =>
+      notCancelled
+        .filter((s) => {
+          const d = new Date(s.createdAt);
+          return d >= from && (!to || d < to);
+        })
+        .reduce((sum, s) => sum + Number(s.total), 0);
+
+    const salesToday = sumInRange(today);
+    const salesYesterday = sumInRange(yesterday, today);
+    const salesMonth = sumInRange(firstDayOfMonth);
+    const salesLastMonth = sumInRange(firstDayOfLastMonth, firstDayOfMonth);
+
     // Matches the real /api/stats route: a COUNT of distinct products that
     // still have stock, not a sum of quantities (which would mix whole units
     // with fractional kg amounts from weighable products).
     const productsInStock = db.products.filter((p) => Number(p.stock) > 0).length;
+
     const recentSales = [...db.sales]
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
       .slice(0, 5)
@@ -210,12 +236,79 @@ async function handleRequest(pathname: string, search: URLSearchParams, method: 
         createdAt: s.createdAt,
         clientName: (s.clientId && db.clients.find((c) => c.id === s.clientId)?.name) || 'Consumidor Final',
       }));
+
     const lowStockProducts = db.products
       .filter((p) => Number(p.stock) <= 5)
       .sort((a, b) => Number(a.stock) - Number(b.stock))
       .slice(0, 10)
       .map((p) => ({ id: p.id, name: p.name, stock: Number(p.stock) }));
-    return json({ salesToday, salesMonth, productsInStock, totalClients: db.clients.length, recentSales, lowStockProducts });
+
+    const seriesMap = new Map<string, number>();
+    for (let i = 0; i < SERIES_DAYS; i++) {
+      const d = new Date(seriesStart);
+      d.setDate(d.getDate() + i);
+      seriesMap.set(d.toISOString().slice(0, 10), 0);
+    }
+    for (const s of notCancelled) {
+      const d = new Date(s.createdAt);
+      if (d < seriesStart) continue;
+      const key = d.toISOString().slice(0, 10);
+      if (seriesMap.has(key)) seriesMap.set(key, (seriesMap.get(key) ?? 0) + Number(s.total));
+    }
+    const salesSeries = Array.from(seriesMap, ([date, total]) => ({ date, total }));
+
+    const productTotals: Record<string, { name: string; quantity: number; revenue: number }> = {};
+    const categoryTotals: Record<string, number> = {};
+    for (const s of notCancelled) {
+      if (new Date(s.createdAt) < firstDayOfMonth) continue;
+      for (const it of s.items) {
+        if (!it.productId) continue;
+        const p = db.products.find((pp) => pp.id === it.productId);
+        if (!p) continue;
+        const revenue = Number(it.price) * Number(it.quantity);
+        productTotals[p.id] = productTotals[p.id] || { name: p.name, quantity: 0, revenue: 0 };
+        productTotals[p.id].quantity += Number(it.quantity);
+        productTotals[p.id].revenue += revenue;
+        const cat = p.category || 'Sin categoría';
+        categoryTotals[cat] = (categoryTotals[cat] ?? 0) + revenue;
+      }
+    }
+    const topProducts = Object.entries(productTotals)
+      .sort((a, b) => b[1].revenue - a[1].revenue)
+      .slice(0, 5)
+      .map(([id, v]) => ({ id, ...v }));
+    const salesByCategory = Object.entries(categoryTotals)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([category, revenue]) => ({ category, revenue }));
+
+    const clientTotals: Record<string, { name: string; total: number }> = {};
+    for (const s of notCancelled) {
+      if (new Date(s.createdAt) < firstDayOfMonth || !s.clientId) continue;
+      const c = db.clients.find((cc) => cc.id === s.clientId);
+      if (!c) continue;
+      clientTotals[c.id] = clientTotals[c.id] || { name: c.name, total: 0 };
+      clientTotals[c.id].total += Number(s.total);
+    }
+    const topClients = Object.entries(clientTotals)
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 5)
+      .map(([id, v]) => ({ id, ...v }));
+
+    return json({
+      salesToday,
+      salesYesterday,
+      salesMonth,
+      salesLastMonth,
+      productsInStock,
+      totalClients: db.clients.length,
+      recentSales,
+      lowStockProducts,
+      salesSeries,
+      topProducts,
+      salesByCategory,
+      topClients,
+    });
   }
 
   // --- /api/reports/advanced ---
@@ -273,6 +366,7 @@ async function handleRequest(pathname: string, search: URLSearchParams, method: 
         stock: String(body.stock ?? 0),
         imageUrl: body.imageUrl ?? null,
         barcode: body.barcode ?? null,
+        category: body.category ?? null,
         expirationDate: body.expirationDate ?? null,
         soldByWeight: !!body.soldByWeight,
         createdAt: touch(),
@@ -317,6 +411,7 @@ async function handleRequest(pathname: string, search: URLSearchParams, method: 
         stock: String(r.stock ?? 0),
         imageUrl: r.imageUrl ?? null,
         barcode: r.barcode ?? null,
+        category: null,
         expirationDate: null,
         soldByWeight: false,
         createdAt: touch(),
@@ -597,7 +692,7 @@ async function handleRequest(pathname: string, search: URLSearchParams, method: 
         product = {
           id: demoId('prod'), businessId: db.business.id, name: r.name || 'Producto', description: null,
           price: String(r.salePrice ?? r.cost ?? 0), stock: '0', imageUrl: null, barcode: r.barcode ?? null,
-          expirationDate: null, soldByWeight: false, createdAt: touch(), updatedAt: touch(), deletedAt: null,
+          category: null, expirationDate: null, soldByWeight: false, createdAt: touch(), updatedAt: touch(), deletedAt: null,
         };
         db.products.unshift(product);
       }

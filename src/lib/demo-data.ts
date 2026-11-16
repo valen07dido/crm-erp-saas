@@ -16,6 +16,7 @@ export interface DemoProduct {
   stock: string;
   imageUrl: string | null;
   barcode: string | null;
+  category: string | null;
   expirationDate: string | null;
   soldByWeight: boolean;
   createdAt: string;
@@ -189,19 +190,19 @@ export function createDemoSeed(): DemoDb {
   const ownerId = 'demo-user-admin';
 
   const products: DemoProduct[] = [
-    ['Coca Cola 500ml', 'Bebida gaseosa', '1200.00', '48', '7790895000016', null, false],
-    ['Fideos Matarazzo 500g', 'Fideos secos', '850.00', '60', '7790070418014', daysFromNow(180), false],
-    ['Queso Cremoso', 'Fraccionado por kilo', '6500.00', '8.500', '7791234567890', daysFromNow(10), true],
-    ['Alfajor Triple', 'Chocolate', '900.00', '36', '7790040010017', null, false],
-    ['Yerba Mate 1kg', null, '3200.00', '22', '7790742000013', null, false],
-    ['Pan Lactal', null, '1900.00', '4', '7792222000111', daysFromNow(3), false],
-    ['Leche Entera 1L', null, '1100.00', '3', '7791234000099', daysFromNow(5), false],
-    ['Jamón Cocido', 'Fraccionado por kilo', '8900.00', '5.200', '7790000111222', daysFromNow(15), true],
-    ['Detergente 750ml', null, '1500.00', '18', '7790001234567', null, false],
-    ['Papel Higiénico x4', null, '2100.00', '27', '7790009988776', null, false],
-    ['Agua Mineral 1.5L', null, '950.00', '40', '7790009911223', null, false],
-    ['Galletitas Surtidas', null, '1350.00', '0', '7790004455667', null, false],
-  ].map(([name, description, price, stock, barcode, expirationDate, soldByWeight]) => ({
+    ['Coca Cola 500ml', 'Bebida gaseosa', '1200.00', '48', '7790895000016', 'Bebidas', null, false],
+    ['Fideos Matarazzo 500g', 'Fideos secos', '850.00', '60', '7790070418014', 'Almacén', daysFromNow(180), false],
+    ['Queso Cremoso', 'Fraccionado por kilo', '6500.00', '8.500', '7791234567890', 'Lácteos', daysFromNow(10), true],
+    ['Alfajor Triple', 'Chocolate', '900.00', '36', '7790040010017', 'Golosinas', null, false],
+    ['Yerba Mate 1kg', null, '3200.00', '22', '7790742000013', 'Almacén', null, false],
+    ['Pan Lactal', null, '1900.00', '4', '7792222000111', 'Panificados', daysFromNow(3), false],
+    ['Leche Entera 1L', null, '1100.00', '3', '7791234000099', 'Lácteos', daysFromNow(5), false],
+    ['Jamón Cocido', 'Fraccionado por kilo', '8900.00', '5.200', '7790000111222', 'Fiambrería', daysFromNow(15), true],
+    ['Detergente 750ml', null, '1500.00', '18', '7790001234567', 'Limpieza', null, false],
+    ['Papel Higiénico x4', null, '2100.00', '27', '7790009988776', 'Limpieza', null, false],
+    ['Agua Mineral 1.5L', null, '950.00', '40', '7790009911223', 'Bebidas', null, false],
+    ['Galletitas Surtidas', null, '1350.00', '0', '7790004455667', 'Golosinas', null, false],
+  ].map(([name, description, price, stock, barcode, category, expirationDate, soldByWeight]) => ({
     id: id('prod'),
     businessId,
     name: name as string,
@@ -210,6 +211,7 @@ export function createDemoSeed(): DemoDb {
     stock: stock as string,
     imageUrl: null,
     barcode: barcode as string,
+    category: category as string | null,
     expirationDate: expirationDate as string | null,
     soldByWeight: soldByWeight as boolean,
     createdAt: daysFromNow(-30),
