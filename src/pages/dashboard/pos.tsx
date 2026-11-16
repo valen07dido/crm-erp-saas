@@ -280,12 +280,18 @@ export default function POSPage() {
       const existing = prev.find(i => i.kind === sellable.kind && i.id === sellable.id);
       if (existing) {
         const newQuantity = existing.quantity + quantity;
-        if (newQuantity > sellable.stock) return prev; // can't exceed stock
+        if (newQuantity > sellable.stock) {
+          alertMessage(`No hay más stock de "${sellable.name}" (disponible: ${sellable.stock})`, 'warning');
+          return prev; // can't exceed stock
+        }
         return prev.map(i =>
           i.kind === sellable.kind && i.id === sellable.id ? { ...i, quantity: newQuantity } : i
         );
       }
-      if (quantity > sellable.stock) return prev;
+      if (quantity > sellable.stock) {
+        alertMessage(`"${sellable.name}" no tiene stock disponible`, 'warning');
+        return prev;
+      }
       return [...prev, { ...sellable, quantity }];
     });
   }, [setCart]);
@@ -342,7 +348,9 @@ export default function POSPage() {
       setBarcodeInput('');
     } else if (found) {
       // Exists but out of stock — that's a restock issue, not a "create it"
-      // situation, so just flash the usual error.
+      // situation. The shake alone looked identical to "code not recognized",
+      // leaving the cashier guessing why nothing happened — say it outright.
+      alertMessage(`"${found.name}" no tiene stock disponible`, 'warning');
       barcodeRef.current?.classList.add('animate-shake');
       setTimeout(() => barcodeRef.current?.classList.remove('animate-shake'), 500);
     } else {
