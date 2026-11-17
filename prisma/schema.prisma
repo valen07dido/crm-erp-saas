@@ -339,3 +339,66 @@ model Transaction {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WALTI Marketing Studio — internal tool (superadmin only), not tenant data.
+// These tables are WALTI's own marketing production, so they have no
+// businessId and are never exposed to tenant routes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Single-row brand kit (colors, fonts, contact, default CTA).
+model MarketingBrandKit {
+  @@map("marketing_brand_kit")
+  id        String   @id @default("default")
+  data      Json
+  updatedAt DateTime @updatedAt
+}
+
+model MarketingCampaign {
+  @@map("marketing_campaigns")
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  name        String
+  status      String   @default("ACTIVE") // DRAFT, ACTIVE, FINISHED
+  /// Brief: objective, audience, mainMessage, offer, channels, duration, pieces
+  brief       Json
+  /// Generated creative pack: concept, angles, headlines, copies, stories, carousels, reels, ctas
+  content     Json?
+
+  designs     MarketingDesign[]
+}
+
+model MarketingDesign {
+  @@map("marketing_designs")
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  name        String
+  format      String   // story, post, portrait, reel-cover
+  status      String   @default("DRAFT") // DRAFT, REVIEW, APPROVED
+  /// Full editable document: background + layers (see src/lib/marketing/types.ts)
+  doc         Json
+  /// Small JPEG data URL used by galleries
+  thumbnail   String?
+  campaignId  String?
+  campaign    MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId])
+}
+
+model MarketingAsset {
+  @@map("marketing_assets")
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+
+  name        String
+  category    String   // logo, screenshot, photo, video, icon, other
+  url         String
+  mimeType    String?
+  width       Int?
+  height      Int?
+  tags        String[]
+}

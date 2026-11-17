@@ -237,7 +237,10 @@ export default function SuperAdminPage() {
             Super Admin
           </div>
           <div className="flex items-center gap-4">
-            <Link href="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+            <Link href="/superadmin/marketing" className="rounded-lg bg-graphite px-3 py-1.5 text-sm font-semibold text-lime hover:opacity-90">
+              Marketing Studio
+            </Link>
+            <Link href="/dashboard"className="text-sm font-medium text-muted-foreground hover:text-foreground">
               Volver a mi Dashboard
             </Link>
           </div>
